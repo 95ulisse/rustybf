@@ -69,6 +69,8 @@ impl<R, W> InterpreterBuilder<R, W>
 
 }
 
+/// Main entrypoint of the Brainfuck interpreter.
+/// This structure holds the state of the tape and can run a set of instructions.
 pub struct Interpreter<R, W>
     where R: Read,
           W: Write

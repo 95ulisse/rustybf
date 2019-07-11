@@ -5,3 +5,6 @@ authors = ["Marco Cameriero <me@marcocameriero.net>"]
 edition = "2018"
 
 [dependencies]
+clap = "2.33.0"
+log = "0.4.7"
+env_logger = "0.6.2"
