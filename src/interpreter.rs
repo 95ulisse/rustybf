@@ -129,31 +129,31 @@ impl<R, W> Interpreter<R, W>
         for inst in instructions {
             match inst {
                 
-                Instruction::Right => {
+                Instruction::Right { .. } => {
                     if self.tape_position == self.tape.len() - 1 {
                         return Err(BrainfuckError::TapeOverflow);
                     }
                     self.tape_position += 1;
                 },
                 
-                Instruction::Left => {
+                Instruction::Left { .. } => {
                     if self.tape_position == 0 {
                         return Err(BrainfuckError::TapeUnderflow);
                     }
                     self.tape_position -= 1;
                 },
                 
-                Instruction::Add => {
+                Instruction::Add { amount, .. } => {
                     let value = &mut self.tape[self.tape_position];
-                    *value = value.wrapping_add(1);
+                    *value = value.wrapping_add(*amount);
+                },
+
+                Instruction::Sub { amount, .. } => {
+                    let value = &mut self.tape[self.tape_position];
+                    *value = value.wrapping_sub(*amount);
                 },
                 
-                Instruction::Sub => {
-                    let value = &mut self.tape[self.tape_position];
-                    *value = value.wrapping_sub(1);
-                },
-                
-                Instruction::Input => {
+                Instruction::Input { .. } => {
                     if let Some(ref mut input) = self.input {
                         input.read_exact(&mut self.tape[self.tape_position..=self.tape_position])
                             .map_err(BrainfuckError::IoError)?;
@@ -162,14 +162,14 @@ impl<R, W> Interpreter<R, W>
                     }
                 },
                 
-                Instruction::Output => {
+                Instruction::Output { .. } => {
                     if let Some(ref mut output) = self.output {
                         output.write_all(&self.tape[self.tape_position..=self.tape_position])
                             .map_err(BrainfuckError::IoError)?;
                     }
                 },
                 
-                Instruction::Loop(ref body) => {
+                Instruction::Loop { ref body, .. } => {
                     while self.tape[self.tape_position] != 0 {
                         self.run(body)?;
                     }
