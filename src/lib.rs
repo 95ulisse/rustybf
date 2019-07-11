@@ -1,5 +1,8 @@
+#[macro_use] extern crate lazy_static;
+
 pub mod parser;
 pub mod interpreter;
+pub mod optimizer;
 
 use std::error::Error;
 use std::{fmt, io};
@@ -13,6 +16,8 @@ pub enum BrainfuckError {
     IoError(io::Error),
     /// Error while parsing.
     ParseError { message: String, position: Position },
+    /// Unknown optimization pass.
+    UnknownOptimizationPass(String),
     /// The data pointer underflowed the available tape.
     TapeUnderflow,
     /// The data pointer overflowed the available tape.
@@ -33,6 +38,9 @@ impl fmt::Display for BrainfuckError {
             },
             ParseError { ref message, position } => {
                 write!(f, "Error parsing Brainfuck file: {} at ({}-{})", message, position.start, position.end)
+            },
+            UnknownOptimizationPass(ref name) => {
+                write!(f, "Unknown optimization pass: {}", name)
             },
             TapeUnderflow => {
                 write!(f, "Tape underflow")

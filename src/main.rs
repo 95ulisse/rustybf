@@ -1,18 +1,19 @@
 #[macro_use] extern crate log;
 
 use std::fs::File;
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 use rustybf::BrainfuckError;
-use rustybf::parser::parse;
+use rustybf::parser::{parse, Instruction};
 use rustybf::interpreter::Interpreter;
+use rustybf::optimizer::{Optimizer, ALL_OPTIMIZATIONS};
 
-fn main_execute(path: &str) -> Result<(), BrainfuckError> {
+fn run_print_ast(_instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
+    Err("Unimplemented AST printing.".into())
+}
+
+fn run_execute(instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
     
-    // Parse the file
-    debug!("Opening {}.", path);
-    let file = File::open(path)?;
-    debug!("Parsing source file.");
-    let instructions = parse(file)?;
+    info!("Executing program...");
 
     // Prepare an interpreter to run the instructions
     let mut interpreter =
@@ -22,16 +23,60 @@ fn main_execute(path: &str) -> Result<(), BrainfuckError> {
         .build();
 
     // Aaaaand, run!
-    debug!("Running program.");
     interpreter.run(&instructions)?;
-    debug!("Done.");
 
     Ok(())
 
 }
 
-fn main_compile(_path: &str) -> Result<(), BrainfuckError> {
+fn run_compile(_instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
     Err("Compile mode is not implemented yet.".into())
+}
+
+fn run(matches: ArgMatches) -> Result<(), BrainfuckError> {
+    
+    // If we have been asked to just list the optimizations, do it and exit
+    if matches.is_present("list-optimizations") {
+        for name in ALL_OPTIMIZATIONS.keys() {
+            println!("{}", name);
+        }
+        return Ok(());
+    }
+
+    // Parse the file
+    let path = matches.value_of("INPUT").unwrap();
+    debug!("Opening {}...", path);
+    let file = File::open(path)?;
+    debug!("Parsing source file...");
+    let mut instructions = parse(file)?;
+    info!("Source file {} loaded.", path);
+
+    // Prepare and run the optimizer
+    let optimizer = Optimizer::with_passes_str(matches.value_of("optimizations").unwrap())?;
+    if optimizer.passes().is_empty() {
+        debug!("No optimizations selected.");
+    } else {
+        debug!("Selected optimization passes:");
+        for pass in optimizer.passes() {
+            debug!("  - {}", pass.name());
+        }
+
+        instructions = optimizer.run(&instructions);
+        info!("Instructions optimized.");
+    }
+
+    // Check what we have to do now
+    let do_print = matches.is_present("print-ast");
+    let do_execute = matches.is_present("execute");
+    let do_compile = matches.is_present("compile");
+    match (do_print, do_execute, do_compile) {
+        (true,  _,     _    ) => run_print_ast(instructions),
+        (false, false, false) => run_compile(instructions),
+        (false, false, true ) => run_compile(instructions),
+        (false, true,  false) => run_execute(instructions),
+        (false, true,  true ) => unreachable!()
+    }
+
 }
 
 fn main() {
@@ -44,19 +89,27 @@ fn main() {
         .arg(
             Arg::with_name("INPUT")
                 .help("Sets the input file to use")
-                .required(true)
+                .required_unless("list-optimizations")
                 .index(1)
+        )
+        .arg(
+            Arg::with_name("v")
+                .short("v")
+                .multiple(true)
+                .help("Sets the level of verbosity. Repeat to increase.")
         )
         .arg(
             Arg::with_name("execute")
                 .short("e")
                 .long("execute")
+                .conflicts_with("compile")
                 .help("Executes the given Brainfuck file without compiling it")
         )
         .arg(
             Arg::with_name("compile")
                 .short("c")
                 .long("compile")
+                .conflicts_with("execute")
                 .help("Compiles the given Brainfuck file producing an executable")
         )
         .arg(
@@ -68,10 +121,14 @@ fn main() {
                 .help("Specifies the optimizations to use")
         )
         .arg(
-            Arg::with_name("v")
-                .short("v")
-                .multiple(true)
-                .help("Sets the level of verbosity. Repeat to increase.")
+            Arg::with_name("list-optimizations")
+                .long("list-optimizations")
+                .help("Prints a list of all available optimizations and exits")
+        )
+        .arg(
+            Arg::with_name("print-ast")
+                .long("print-ast")
+                .help("Prints the optimized AST and exits")
         )
         .get_matches();
 
@@ -89,28 +146,10 @@ fn main() {
     )
     .init();
 
-    // Check if we are in compile or execute mode
-    let file = matches.value_of("INPUT").unwrap();
-    let do_execute = matches.is_present("execute");
-    let do_compile = matches.is_present("compile");
-    let res = match (do_execute, do_compile) {
-        (true, true) => {
-            Err("Both switches for compile and execute mode cannot be present at the same time.".into())
-        },
-        (false, true) => {
-            main_compile(file)
-        },
-        (true, false) => {
-            main_execute(file)
-        }
-        (false, false) => {
-            // Default to compile mode
-            main_compile(file)
-        }
-    };
-
-    if let Err(e) = res {
+    // Run the program
+    if let Err(e) = run(matches) {
         error!("{}", e);
         std::process::exit(1);
     }
+
 }
