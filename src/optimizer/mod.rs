@@ -11,7 +11,7 @@ pub trait Pass {
 
     /// Executes the pass on the given set of instructions.
     /// Returns the new set of optimized instructions.
-    fn run(&self, instructions: &[Instruction]) -> Vec<Instruction>;
+    fn run(&self, instructions: Vec<Instruction>) -> Vec<Instruction>;
 
 }
 
@@ -66,10 +66,10 @@ impl Optimizer {
     }
     
     /// Runs all the passes on the given set of instructions
-    pub fn run(&self, instructions: &[Instruction]) -> Vec<Instruction> {
-        let mut accum = Vec::from(instructions);
+    pub fn run(&self, instructions: Vec<Instruction>) -> Vec<Instruction> {
+        let mut accum = instructions;
         for pass in &self.passes {
-            accum = pass.run(&accum);
+            accum = pass.run(accum);
         }
         accum
     }

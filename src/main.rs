@@ -64,7 +64,7 @@ fn run(matches: ArgMatches) -> Result<(), BrainfuckError> {
             debug!("  - {}", pass.name());
         }
 
-        instructions = optimizer.run(&instructions);
+        instructions = optimizer.run(instructions);
         info!("Instructions optimized.");
     }
 

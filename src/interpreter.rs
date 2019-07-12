@@ -131,28 +131,23 @@ impl<R, W> Interpreter<R, W>
         for inst in instructions {
             match inst {
                 
-                Instruction::Right { .. } => {
-                    if self.tape_position == self.tape.len() - 1 {
+                Instruction::Right { amount, .. } => {
+                    if self.tape_position + amount >= self.tape.len() {
                         return Err(BrainfuckError::TapeOverflow);
                     }
-                    self.tape_position += 1;
+                    self.tape_position += amount;
                 },
                 
-                Instruction::Left { .. } => {
-                    if self.tape_position == 0 {
+                Instruction::Left { amount, .. } => {
+                    if self.tape_position < *amount {
                         return Err(BrainfuckError::TapeUnderflow);
                     }
-                    self.tape_position -= 1;
+                    self.tape_position -= amount;
                 },
                 
                 Instruction::Add { amount, .. } => {
                     let value = &mut self.tape[self.tape_position];
                     *value = value.wrapping_add(*amount);
-                },
-
-                Instruction::Sub { amount, .. } => {
-                    let value = &mut self.tape[self.tape_position];
-                    *value = value.wrapping_sub(*amount);
                 },
                 
                 Instruction::Input { .. } => {

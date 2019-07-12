@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::fmt;
+use std::{cmp, fmt, u8};
 use crate::BrainfuckError;
 
 /// Position range to track instructions back to source code.
@@ -19,6 +19,17 @@ impl From<usize> for Position {
     }
 }
 
+impl Position {
+
+    /// Merges two positions into one.
+    pub fn merge(&self, other: Position) -> Position {
+        let start = cmp::min(self.start, other.start);
+        let end = cmp::max(self.end, other.end);
+        Position { start, end }
+    }
+
+}
+
 /// A single Brainfuck instruction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
@@ -26,14 +37,12 @@ pub enum Instruction {
         amount: u8,
         position: Position
     },
-    Sub {
-        amount: u8,
-        position: Position
-    },
     Right {
+        amount: usize,
         position: Position
     },
     Left{
+        amount: usize,
         position: Position
     },
     Input{
@@ -54,7 +63,6 @@ impl Instruction {
     pub fn position(&self) -> Position {
         match *self {
              Instruction::Add { position, .. } => position,
-             Instruction::Sub { position, .. } => position,
              Instruction::Right { position, .. } => position,
              Instruction::Left { position, .. } => position,
              Instruction::Input { position, .. } => position,
@@ -79,14 +87,11 @@ fn print_instruction(instruction: &Instruction, f: &mut fmt::Formatter, level: u
         Instruction::Add { amount, .. } => {
             write!(f, "Add({})", amount)?;
         },
-        Instruction::Sub { amount, .. } => {
-            write!(f, "Sub({})", amount)?;
+        Instruction::Right { amount, .. } => {
+            write!(f, "Right({})", amount)?;
         },
-        Instruction::Right { .. } => {
-            write!(f, "Right")?;
-        },
-        Instruction::Left { .. } => {
-            write!(f, "Left")?;
+        Instruction::Left { amount, .. } => {
+            write!(f, "Left({})", amount)?;
         },
         Instruction::Input { .. } => {
             write!(f, "Input")?;
@@ -115,10 +120,10 @@ pub fn parse(r: impl Read) -> Result<Vec<Instruction>, BrainfuckError> {
     for (index, res) in r.bytes().enumerate() {
         match res {
             Err(e) => return Err(BrainfuckError::IoError(e)),
-            Ok(b'>') => instructions.push(Instruction::Right  { position: index.into() }),
-            Ok(b'<') => instructions.push(Instruction::Left   { position: index.into() }),
+            Ok(b'>') => instructions.push(Instruction::Right  { position: index.into(), amount: 1 }),
+            Ok(b'<') => instructions.push(Instruction::Left   { position: index.into(), amount: 1 }),
             Ok(b'+') => instructions.push(Instruction::Add    { position: index.into(), amount: 1  }),
-            Ok(b'-') => instructions.push(Instruction::Sub    { position: index.into(), amount: 1 }),
+            Ok(b'-') => instructions.push(Instruction::Add    { position: index.into(), amount: u8::MAX }),
             Ok(b'.') => instructions.push(Instruction::Output { position: index.into() }),
             Ok(b',') => instructions.push(Instruction::Input  { position: index.into() }),
             Ok(b'[') => {
@@ -174,9 +179,9 @@ mod tests {
         let prog = Cursor::new("+-><.,");
         assert_eq!(parse(prog).unwrap(), vec![
             Instruction::Add { amount: 1, position: 0.into() },
-            Instruction::Sub { amount: 1, position: 1.into() },
-            Instruction::Right { position: 2.into() },
-            Instruction::Left { position: 3.into() },
+            Instruction::Add { amount: u8::MAX, position: 1.into() },
+            Instruction::Right { position: 2.into(), amount: 1 },
+            Instruction::Left { position: 3.into(), amount: 1 },
             Instruction::Output { position: 4.into() },
             Instruction::Input { position: 5.into() }
         ]);
@@ -217,10 +222,10 @@ mod tests {
                                     Instruction::Output { position: 8.into() }
                                 ]
                             },
-                            Instruction::Sub { amount: 1, position: 10.into() }
+                            Instruction::Add { amount: u8::MAX, position: 10.into() }
                         ]
                     },
-                    Instruction::Sub { amount: 1, position: 12.into() }
+                    Instruction::Add { amount: u8::MAX, position: 12.into() }
                 ]
             }
         ]);
