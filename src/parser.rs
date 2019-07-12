@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::fmt;
 use crate::BrainfuckError;
 
 /// Position range to track instructions back to source code.
@@ -62,6 +63,47 @@ impl Instruction {
         }
     }
 
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        print_instruction(self, f, 0)
+    }
+}
+
+fn print_instruction(instruction: &Instruction, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+    if level > 0 {
+        write!(f, "{:width$}", "", width = level * 4)?;
+    }
+    match instruction {
+        Instruction::Add { amount, .. } => {
+            write!(f, "Add({})", amount)?;
+        },
+        Instruction::Sub { amount, .. } => {
+            write!(f, "Sub({})", amount)?;
+        },
+        Instruction::Right { .. } => {
+            write!(f, "Right")?;
+        },
+        Instruction::Left { .. } => {
+            write!(f, "Left")?;
+        },
+        Instruction::Input { .. } => {
+            write!(f, "Input")?;
+        },
+        Instruction::Output { .. } => {
+            write!(f, "Output")?;
+        },
+        Instruction::Loop { ref body, .. } => {
+            writeln!(f, "Loop {{")?;
+            for i in body {
+                print_instruction(i, f, level + 1)?;
+                writeln!(f)?;
+            }
+            write!(f, "{:width$}}}", "", width = level * 4)?;
+        }
+    }
+    Ok(())
 }
 
 /// Parses a Brainfuck program from the given stream.

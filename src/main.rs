@@ -7,8 +7,11 @@ use rustybf::parser::{parse, Instruction};
 use rustybf::interpreter::Interpreter;
 use rustybf::optimizer::{Optimizer, ALL_OPTIMIZATIONS};
 
-fn run_print_ast(_instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
-    Err("Unimplemented AST printing.".into())
+fn run_print_instructions(instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
+    for i in &instructions {
+        println!("{}", i);
+    }
+    Ok(())
 }
 
 fn run_execute(instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
@@ -66,11 +69,11 @@ fn run(matches: ArgMatches) -> Result<(), BrainfuckError> {
     }
 
     // Check what we have to do now
-    let do_print = matches.is_present("print-ast");
+    let do_print = matches.is_present("print-instructions");
     let do_execute = matches.is_present("execute");
     let do_compile = matches.is_present("compile");
     match (do_print, do_execute, do_compile) {
-        (true,  _,     _    ) => run_print_ast(instructions),
+        (true,  _,     _    ) => run_print_instructions(instructions),
         (false, false, false) => run_compile(instructions),
         (false, false, true ) => run_compile(instructions),
         (false, true,  false) => run_execute(instructions),
@@ -126,9 +129,9 @@ fn main() {
                 .help("Prints a list of all available optimizations and exits")
         )
         .arg(
-            Arg::with_name("print-ast")
-                .long("print-ast")
-                .help("Prints the optimized AST and exits")
+            Arg::with_name("print-instructions")
+                .long("print-instructions")
+                .help("Prints the optimized instructions and exits")
         )
         .get_matches();
 
