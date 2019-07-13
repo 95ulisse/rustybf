@@ -163,6 +163,7 @@ impl<R, W> Interpreter<R, W>
                     if let Some(ref mut output) = self.output {
                         output.write_all(&self.tape[self.tape_position..=self.tape_position])
                             .map_err(BrainfuckError::IoError)?;
+                        output.flush()?;
                     }
                 },
                 
