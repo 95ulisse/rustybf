@@ -92,6 +92,7 @@ lazy_static! {
         use passes::*;
         let mut map: HashMap<_, Arc<dyn Pass + Sync + Send>> = HashMap::new();
         map.insert("clear-loops", Arc::new(ClearLoops));
+        map.insert("mul-loops", Arc::new(MulLoops));
         map.insert("collapse-increments", Arc::new(CollapseIncrements));
         map.insert("dead-code", Arc::new(DeadCode));
         map
@@ -99,9 +100,11 @@ lazy_static! {
 
     /// Order of the default optimizaiton passes.
     pub static ref DEFAULT_OPTIMIZATION_PASSES: Vec<Arc<dyn Pass + Sync + Send>> = vec![
-        Arc::clone(&ALL_OPTIMIZATIONS["clear-loops"]),
         Arc::clone(&ALL_OPTIMIZATIONS["collapse-increments"]),
-        Arc::clone(&ALL_OPTIMIZATIONS["dead-code"]),
+        Arc::clone(&ALL_OPTIMIZATIONS["mul-loops"]),
+        Arc::clone(&ALL_OPTIMIZATIONS["dead-code"])
+
+        // clear-loops is not included because it is strictly included by mul-loops
     ];
 
 }

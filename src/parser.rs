@@ -55,7 +55,17 @@ pub enum Instruction {
         body: Vec<Instruction>,
         position: Position
     },
+
+    // The following instructions are not part of the Brainfuck language,
+    // but are added by the different optimizations
+
     Clear {
+        position: Position
+    },
+
+    Mul {
+        offset: isize,
+        amount: u8,
         position: Position
     }
 }
@@ -71,7 +81,8 @@ impl Instruction {
              Instruction::Input { position, .. } => position,
              Instruction::Output { position, .. } => position,
              Instruction::Loop { position, .. } => position,
-             Instruction::Clear { position, ..} => position
+             Instruction::Clear { position, .. } => position,
+             Instruction::Mul { position, .. } => position
         }
     }
 
@@ -113,6 +124,9 @@ fn print_instruction(instruction: &Instruction, f: &mut fmt::Formatter, level: u
         },
         Instruction::Clear { .. } => {
             write!(f, "Clear")?;
+        },
+        Instruction::Mul { offset, amount, .. } => {
+            write!(f, "Mul({}) {{ offset: {} }}", amount, offset)?;
         }
     }
     Ok(())

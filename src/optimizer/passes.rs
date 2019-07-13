@@ -1,4 +1,5 @@
-use itertools::Itertools;
+use std::collections::HashMap;
+use itertools::{Itertools, Either};
 use crate::parser::Instruction;
 use crate::optimizer::Pass;
 
@@ -174,6 +175,190 @@ impl Pass for ClearLoops {
         })
 
         .collect()
+    }
+
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MulLoops;
+
+impl Pass for MulLoops {
+
+    fn name(&self) -> &str {
+        "mul-loops"
+    }
+
+    fn run(&self, instructions: Vec<Instruction>) -> Vec<Instruction> {
+        use Instruction::*;
+        instructions.into_iter()
+        
+        // Check if each loop is a multiplication
+        .flat_map(|i| match i {
+            Loop { ref body, position } => {
+                if let Some(multiplications) = recognize_mul_loop(body) {
+
+                    // Replace each multiplication with the corresponding Mul and end with a Clear
+                    Either::Left(
+                        multiplications.into_iter()
+                        .map(move |(offset, amount)| Instruction::Mul { offset, amount, position })
+                        .chain(::std::iter::once(Instruction::Clear { position }))
+                    )
+
+                } else {
+                    Either::Right(::std::iter::once(i))
+                }
+            },
+            _ => Either::Right(::std::iter::once(i))
+        })
+
+        // Recurse inside surviving loops
+        .map(|i| match i {
+            Loop { body, position } => {
+                Loop {
+                    body: MulLoops.run(body),
+                    position
+                }
+            },
+            _ => i
+        })
+
+        .collect()
+    }
+
+}
+
+/// Recognizes if the body of a loop is a multiplication loop.
+/// The returned value is a map recording the offsets and their multiplicative factors, i.e.
+/// if the mapping `i => x` is in the returned map, then the cell at offset `i` from the current one
+/// will be multiplied by factor `x`.
+fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, u8>> {
+    
+    // First instruction must be a `-`
+    if instructions.is_empty() {
+        return None;
+    }
+    match instructions.first().unwrap() {
+        Instruction::Add { amount: 255, .. } => {},
+        _ => return None
+    }
+
+    // Validate the rest of the instructions
+    let mut res: HashMap<isize, u8> = HashMap::new();
+    let mut offset: isize = 0;
+    for i in &instructions[1..] {
+        match i {
+
+            Instruction::Left { amount, .. } => {
+                offset -= *amount as isize;
+            },
+
+            Instruction::Right { amount, .. } => {
+                offset += *amount as isize;
+            },
+
+            Instruction::Add { amount, .. } => {
+
+                // If we are incrementing the cell at offset 0, we are changing the iteration
+                // counter, thus this is not a mul loop
+                if offset == 0 {
+                    return None;
+                }
+
+                let x: &mut _ = res.entry(offset).or_default();
+                *x = x.wrapping_add(*amount);
+
+            },
+
+            _ => {
+                // Any other instruction means that this is not a multiplication loop
+                return None;
+            }
+        }
+    }
+
+    // If the number of lefts and rights were not balanced,
+    // we ended up in a cell different from the one we started,
+    // so this is not a mul
+    if offset != 0 {
+        None
+    } else {
+        Some(res)
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use crate::parser::parse;
+
+    macro_rules! map(
+        { } => { ::std::collections::HashMap::new() };
+        { $($key:expr => $value:expr),+ } => {
+            {
+                let mut m = ::std::collections::HashMap::new();
+                $(
+                    m.insert($key, $value);
+                )+
+                m
+            }
+        };
+    );
+
+    fn p(s: &str) -> Vec<Instruction> {
+        parse(Cursor::new(s)).unwrap()
+    }
+
+    #[test]
+    fn test_recognize_mul_loop() {
+
+        // Empty loop
+        assert_eq!(recognize_mul_loop(&p("-")).unwrap(), map! {});
+
+        // Loop with single multiplication
+        assert_eq!(recognize_mul_loop(&p("->+<")).unwrap(), map! {
+            1 => 1
+        });
+        assert_eq!(recognize_mul_loop(&p("->++<")).unwrap(), map! {
+            1 => 2
+        });
+
+        // Loop with more than one single multiplication
+        assert_eq!(recognize_mul_loop(&p("->+>+<<")).unwrap(), map! {
+            1 => 1,
+            2 => 1
+        });
+        assert_eq!(recognize_mul_loop(&p("->++>+++<<")).unwrap(), map! {
+            1 => 2,
+            2 => 3
+        });
+
+        // Negative offsets
+        assert_eq!(recognize_mul_loop(&p("-<+>")).unwrap(), map! {
+            -1 => 1
+        });
+        assert_eq!(recognize_mul_loop(&p("-<+>>+<")).unwrap(), map! {
+            -1 => 1,
+            1 => 1
+        });
+
+        // Strange loops with interleaving sums
+        assert_eq!(recognize_mul_loop(&p("->>++<++++>+>++<<<<-->")).unwrap(), map! {
+            -1 => 254 /* = -2 */,
+            1 => 4,
+            2 => 3,
+            3 => 2
+        });
+
+        // Now a couple of tests on invalid loops
+        assert!(recognize_mul_loop(&p("")).is_none());
+        assert!(recognize_mul_loop(&p("+")).is_none());
+        assert!(recognize_mul_loop(&p("--")).is_none());
+        assert!(recognize_mul_loop(&p("->")).is_none());
+        assert!(recognize_mul_loop(&p("-<")).is_none());
+        assert!(recognize_mul_loop(&p("->+<+")).is_none());
+
     }
 
 }

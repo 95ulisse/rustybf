@@ -174,6 +174,17 @@ impl<R, W> Interpreter<R, W>
 
                 Instruction::Clear { .. } => {
                     self.tape[self.tape_position] = 0;
+                },
+
+                Instruction::Mul { offset, amount, .. } => {
+                    let target_pos = (self.tape_position as isize) + *offset;
+                    if target_pos < 0 {
+                        return Err(BrainfuckError::TapeUnderflow);
+                    }
+                    if target_pos >= self.tape.len() as isize {
+                        return Err(BrainfuckError::TapeOverflow);
+                    }
+                    self.tape[target_pos as usize] *= amount;
                 }
 
             }
