@@ -64,18 +64,22 @@ impl Pass for CollapseIncrements {
                     })
                 },
 
-                // Loops must be optimized too
-                (Loop { body, position }, other) => {
-                    Err((Loop {
-                        body: CollapseIncrements.run(body),
-                        position
-                    }, other))
-                }
-
                 (a, b) => Err((a, b))
 
             }
         })
+
+        // Recurse inside loops
+        .map(|i| match i {
+            Loop { body, position } => {
+                Loop {
+                    body: CollapseIncrements.run(body),
+                    position
+                }
+            },
+            _ => i
+        })
+
         .collect()
     }
 
