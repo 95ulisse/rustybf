@@ -211,22 +211,13 @@ impl Pass for MulLoops {
 /// Recognizes if the body of a loop is a multiplication loop.
 /// The returned value is a map recording the offsets and their multiplicative factors, i.e.
 /// if the mapping `i => x` is in the returned map, then the cell at offset `i` from the current one
-/// will be multiplied by factor `x`.
+/// will be added a value equal to the current cell times `x`.
 fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, Wrapping<u8>>> {
     
-    // First instruction must be a `-`
-    if instructions.is_empty() {
-        return None;
-    }
-    match instructions.first().unwrap() {
-        Instruction::Add { amount: Wrapping(u8::MAX), .. } => {},
-        _ => return None
-    }
-
-    // Validate the rest of the instructions
+    // Compute a map of all the cells modified by the instructions
     let mut res: HashMap<isize, Wrapping<u8>> = HashMap::new();
     let mut offset: isize = 0;
-    for i in &instructions[1..] {
+    for i in instructions {
         match i {
 
             Instruction::Move { offset: off, .. } => {
@@ -234,21 +225,14 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, Wra
             },
 
             Instruction::Add { amount, .. } => {
-
-                // If we are incrementing the cell at offset 0, we are changing the iteration
-                // counter, thus this is not a mul loop
-                if offset == 0 {
-                    return None;
-                }
-
                 *res.entry(offset).or_default() += *amount;
-
             },
 
             _ => {
                 // Any other instruction means that this is not a multiplication loop
                 return None;
             }
+
         }
     }
 
@@ -256,10 +240,19 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, Wra
     // we ended up in a cell different from the one we started,
     // so this is not a mul
     if offset != 0 {
-        None
-    } else {
-        Some(res)
+        return None;
     }
+    
+    // The loop must decrement the first cell by exactly 1 each iteration
+    match res.get(&0) {
+        Some(Wrapping(u8::MAX)) => {
+            // Remove the 0 from the map because it's implicit
+            res.remove(&0);
+        },
+        _ => return None
+    }
+
+    Some(res)
 
 }
 
@@ -327,6 +320,11 @@ mod tests {
             1 => 4,
             2 => 3,
             3 => 2
+        });
+
+        // Loops must not start with a `-`
+        assert_eq!(recognize_mul_loop(&p(">+<->+<")).unwrap(), map! {
+            1 => 2
         });
 
         // Now a couple of tests on invalid loops
