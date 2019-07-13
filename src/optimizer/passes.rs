@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::num::Wrapping;
+use std::u8;
 use itertools::{Itertools, Either};
 use crate::parser::Instruction;
 use crate::optimizer::Pass;
@@ -134,7 +135,7 @@ impl Pass for ClearLoops {
         .map(|i| match &i {
             Loop { ref body, position } => {
                 match body.as_slice() {
-                    [ Add { amount: Wrapping(255), .. } ] => {
+                    [ Add { amount: Wrapping(u8::MAX), .. } ] => {
                         Clear { position: *position }
                     },
                     _ => i
@@ -218,7 +219,7 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, Wra
         return None;
     }
     match instructions.first().unwrap() {
-        Instruction::Add { amount: Wrapping(255), .. } => {},
+        Instruction::Add { amount: Wrapping(u8::MAX), .. } => {},
         _ => return None
     }
 
@@ -240,8 +241,7 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, Wra
                     return None;
                 }
 
-                let x: &mut _ = res.entry(offset).or_default();
-                *x += *amount;
+                *res.entry(offset).or_default() += *amount;
 
             },
 
