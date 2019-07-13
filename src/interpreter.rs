@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::num::Wrapping;
 use crate::BrainfuckError;
 use crate::parser::Instruction;
 
@@ -60,7 +61,7 @@ impl<R, W> InterpreterBuilder<R, W>
     /// Builds the actual [`Interpreter`](crate::interpreter::Interpreter).
     pub fn build(&mut self) -> Interpreter<R, W> {
         Interpreter {
-            tape: vec![0; self.tape_size],
+            tape: vec![Wrapping(0); self.tape_size],
             tape_position: 0,
             input: std::mem::replace(&mut self.input, None),
             output: std::mem::replace(&mut self.output, None)
@@ -75,7 +76,7 @@ pub struct Interpreter<R, W>
     where R: Read,
           W: Write
 {
-    tape: Vec<u8>,
+    tape: Vec<Wrapping<u8>>,
     tape_position: usize,
     input: Option<R>,
     output: Option<W>
@@ -107,7 +108,7 @@ impl<R, W> Interpreter<R, W>
     }
 
     /// Returns a reference to the underlying tape used by this [`Interpreter`](crate::interpreter::Interpreter).
-    pub fn tape(&self) -> &[u8] {
+    pub fn tape(&self) -> &[Wrapping<u8>] {
         &*self.tape
     }
 
@@ -138,39 +139,41 @@ impl<R, W> Interpreter<R, W>
                 
                 Instruction::Add { amount, .. } => {
                     let value = &mut self.tape[self.tape_position];
-                    *value = value.wrapping_add(*amount);
+                    *value += *amount;
                 },
                 
                 Instruction::Input { .. } => {
                     if let Some(ref mut input) = self.input {
-                        input.read_exact(&mut self.tape[self.tape_position..=self.tape_position])
-                            .map_err(BrainfuckError::IoError)?;
+                        let mut buf = [0u8];
+                        input.read_exact(&mut buf).map_err(BrainfuckError::IoError)?;
+                        self.tape[self.tape_position] = Wrapping(buf[0]);
                     } else {
-                        self.tape[self.tape_position] = 0;
+                        self.tape[self.tape_position] = Wrapping(0);
                     }
                 },
                 
                 Instruction::Output { .. } => {
                     if let Some(ref mut output) = self.output {
-                        output.write_all(&self.tape[self.tape_position..=self.tape_position])
-                            .map_err(BrainfuckError::IoError)?;
+                        let buf = self.tape[self.tape_position].0;
+                        output.write_all(&[buf]).map_err(BrainfuckError::IoError)?;
                         output.flush()?;
                     }
                 },
                 
                 Instruction::Loop { ref body, .. } => {
-                    while self.tape[self.tape_position] != 0 {
+                    while self.tape[self.tape_position] != Wrapping(0) {
                         self.run(body)?;
                     }
                 },
 
                 Instruction::Clear { .. } => {
-                    self.tape[self.tape_position] = 0;
+                    self.tape[self.tape_position] = Wrapping(0);
                 },
 
                 Instruction::Mul { offset, amount, .. } => {
                     let target_pos = self.compute_offset(*offset)?;
-                    self.tape[target_pos] *= amount;
+                    let tmp = self.tape[self.tape_position] * (*amount);
+                    self.tape[target_pos] += tmp;
                 }
 
             }

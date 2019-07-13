@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::num::Wrapping;
 use itertools::{Itertools, Either};
 use crate::parser::Instruction;
 use crate::optimizer::Pass;
@@ -20,7 +21,7 @@ impl Pass for CollapseIncrements {
                 // Merge consecutive adds together
                 (Add { amount: x, position: posa }, Add { amount: y, position: posb }) => {
                     Ok(Add {
-                        amount: x.wrapping_add(y),
+                        amount: x + y,
                         position: posa.merge(posb)
                     })
                 },
@@ -81,17 +82,14 @@ fn remove_dead_code_inner(instructions: Vec<Instruction>, skip_initial: bool) ->
         
     // First of all, remove null increments
     instructions.into_iter().filter(|i| match i {
-        Add { amount: 0, .. } |
+        Add { amount: Wrapping(0), .. } |
         Move { offset: 0, .. } => false,
         _ => true
     })
 
     // Loops at the beginning of the program are dead code,
     // since all the cells are initialized as zero.
-    .skip_while(|i| match i {
-        Loop { .. } if skip_initial => true,
-        _ => false
-    })
+    .skip_while(|i| i.is_loop() && skip_initial)
 
     // Remove consecutive loops. When we have two consecutive loops,
     // the second one is dead code because if the previous one exited,
@@ -136,7 +134,7 @@ impl Pass for ClearLoops {
         .map(|i| match &i {
             Loop { ref body, position } => {
                 match body.as_slice() {
-                    [ Add { amount: 255, .. } ] => {
+                    [ Add { amount: Wrapping(255), .. } ] => {
                         Clear { position: *position }
                     },
                     _ => i
@@ -213,19 +211,19 @@ impl Pass for MulLoops {
 /// The returned value is a map recording the offsets and their multiplicative factors, i.e.
 /// if the mapping `i => x` is in the returned map, then the cell at offset `i` from the current one
 /// will be multiplied by factor `x`.
-fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, u8>> {
+fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, Wrapping<u8>>> {
     
     // First instruction must be a `-`
     if instructions.is_empty() {
         return None;
     }
     match instructions.first().unwrap() {
-        Instruction::Add { amount: 255, .. } => {},
+        Instruction::Add { amount: Wrapping(255), .. } => {},
         _ => return None
     }
 
     // Validate the rest of the instructions
-    let mut res: HashMap<isize, u8> = HashMap::new();
+    let mut res: HashMap<isize, Wrapping<u8>> = HashMap::new();
     let mut offset: isize = 0;
     for i in &instructions[1..] {
         match i {
@@ -243,7 +241,7 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, u8>
                 }
 
                 let x: &mut _ = res.entry(offset).or_default();
-                *x = x.wrapping_add(*amount);
+                *x += *amount;
 
             },
 
@@ -265,6 +263,8 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, u8>
 
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,7 +277,7 @@ mod tests {
             {
                 let mut m = ::std::collections::HashMap::new();
                 $(
-                    m.insert($key, $value);
+                    m.insert($key, Wrapping($value));
                 )+
                 m
             }

@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::num::Wrapping;
 use std::{cmp, fmt, u8};
 use crate::BrainfuckError;
 
@@ -34,7 +35,7 @@ impl Position {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
     Add {
-        amount: u8,
+        amount: Wrapping<u8>,
         position: Position
     },
     Move {
@@ -61,7 +62,7 @@ pub enum Instruction {
 
     Mul {
         offset: isize,
-        amount: u8,
+        amount: Wrapping<u8>,
         position: Position
     }
 }
@@ -149,8 +150,8 @@ pub fn parse(r: impl Read) -> Result<Vec<Instruction>, BrainfuckError> {
             Err(e) => return Err(BrainfuckError::IoError(e)),
             Ok(b'>') => instructions.push(Instruction::Move   { position: index.into(), offset: 1 }),
             Ok(b'<') => instructions.push(Instruction::Move   { position: index.into(), offset: -1 }),
-            Ok(b'+') => instructions.push(Instruction::Add    { position: index.into(), amount: 1  }),
-            Ok(b'-') => instructions.push(Instruction::Add    { position: index.into(), amount: u8::MAX }),
+            Ok(b'+') => instructions.push(Instruction::Add    { position: index.into(), amount: Wrapping(1)  }),
+            Ok(b'-') => instructions.push(Instruction::Add    { position: index.into(), amount: Wrapping(u8::MAX) }),
             Ok(b'.') => instructions.push(Instruction::Output { position: index.into() }),
             Ok(b',') => instructions.push(Instruction::Input  { position: index.into() }),
             Ok(b'[') => {
@@ -205,8 +206,8 @@ mod tests {
     fn test_simple_parse() {
         let prog = Cursor::new("+-><.,");
         assert_eq!(parse(prog).unwrap(), vec![
-            Instruction::Add { amount: 1, position: 0.into() },
-            Instruction::Add { amount: u8::MAX, position: 1.into() },
+            Instruction::Add { amount: Wrapping(1), position: 0.into() },
+            Instruction::Add { amount: Wrapping(u8::MAX), position: 1.into() },
             Instruction::Move { position: 2.into(), offset: 1 },
             Instruction::Move { position: 3.into(), offset: -1 },
             Instruction::Output { position: 4.into() },
@@ -232,7 +233,7 @@ mod tests {
             Instruction::Loop {
                 position: Position { start: 0, end: 13 },
                 body: vec![
-                    Instruction::Add { amount: 1, position: 1.into() },
+                    Instruction::Add { amount: Wrapping(1), position: 1.into() },
                     Instruction::Loop{
                         position: Position { start: 2, end: 4 },
                         body: vec![
@@ -242,17 +243,17 @@ mod tests {
                     Instruction::Loop{
                         position: Position { start: 5, end: 11 },
                         body: vec![
-                            Instruction::Add { amount: 1, position: 6.into() },
+                            Instruction::Add { amount: Wrapping(1), position: 6.into() },
                             Instruction::Loop{
                                 position: Position { start: 7, end: 9 },
                                 body: vec![
                                     Instruction::Output { position: 8.into() }
                                 ]
                             },
-                            Instruction::Add { amount: u8::MAX, position: 10.into() }
+                            Instruction::Add { amount: Wrapping(u8::MAX), position: 10.into() }
                         ]
                     },
-                    Instruction::Add { amount: u8::MAX, position: 12.into() }
+                    Instruction::Add { amount: Wrapping(u8::MAX), position: 12.into() }
                 ]
             }
         ]);
