@@ -100,9 +100,9 @@ lazy_static! {
 
     /// Order of the default optimizaiton passes.
     pub static ref DEFAULT_OPTIMIZATION_PASSES: Vec<Arc<dyn Pass + Sync + Send>> = vec![
+        Arc::clone(&ALL_OPTIMIZATIONS["dead-code"]),
         Arc::clone(&ALL_OPTIMIZATIONS["collapse-increments"]),
-        Arc::clone(&ALL_OPTIMIZATIONS["mul-loops"]),
-        Arc::clone(&ALL_OPTIMIZATIONS["dead-code"])
+        Arc::clone(&ALL_OPTIMIZATIONS["mul-loops"])
 
         // clear-loops is not included because it is strictly included by mul-loops
     ];

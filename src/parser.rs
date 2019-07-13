@@ -86,6 +86,20 @@ impl Instruction {
         }
     }
 
+    /// Returns `true` if the instruction represents a Brainfuck loop.
+    /// Some instructions like `Clear` and `Mul` do not exist natively in the language,
+    /// and are actually implemented with simple loops.
+    pub fn is_loop(&self) -> bool {
+        match *self {
+            Instruction::Loop { .. } |
+            Instruction::Clear { .. } |
+            Instruction::Mul { .. }
+                => true,
+
+            _ => false
+        }
+    }
+
 }
 
 impl fmt::Display for Instruction {

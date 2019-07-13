@@ -95,50 +95,53 @@ impl Pass for DeadCode {
     }
 
     fn run(&self, instructions: Vec<Instruction>) -> Vec<Instruction> {
-        use Instruction::*;
-        
-        // First of all, remove null increments
-        instructions.into_iter().filter(|i| match i {
-            Add { amount: 0, .. } |
-            Right { amount: 0, .. } |
-            Left { amount: 0, .. } => false,
-            _ => true
-        })
-
-        // Remove consecutive loops. When we have two consecutive loops,
-        // the second one is dead code because if the previous one exited,
-        // it means the the current cell value is 0, thus the next loop will never be executed.
-        // The `Clear` instruction is just a collapsed loop, so it counts too.
-        .coalesce(|a, b| {
-            match (a, b) {
-                (a @ Loop { .. }, Loop { .. }) |
-                (a @ Loop { .. }, Clear { .. }) => Ok(a),
-
-                (a, b) => Err((a, b))
-            }
-        })
-
-        // For a similar reason, all loops at the beginning of the program are dead code,
-        // since all the cells are initialized as zero.
-        .skip_while(|i| match i {
-            Loop { .. } => true,
-            _ => false
-        })
-
-        // Recurse inside surviving loops
-        .map(|i| match i {
-            Loop { body, position } => {
-                Loop {
-                    body: DeadCode.run(body),
-                    position
-                }
-            },
-            _ => i
-        })
-
-        .collect()
+        remove_dead_code_inner(instructions, true)
     }
 
+}
+
+fn remove_dead_code_inner(instructions: Vec<Instruction>, skip_initial: bool) -> Vec<Instruction> {
+    use Instruction::*;
+        
+    // First of all, remove null increments
+    instructions.into_iter().filter(|i| match i {
+        Add { amount: 0, .. } |
+        Right { amount: 0, .. } |
+        Left { amount: 0, .. } => false,
+        _ => true
+    })
+
+    // Loops at the beginning of the program are dead code,
+    // since all the cells are initialized as zero.
+    .skip_while(|i| match i {
+        Loop { .. } if skip_initial => true,
+        _ => false
+    })
+
+    // Remove consecutive loops. When we have two consecutive loops,
+    // the second one is dead code because if the previous one exited,
+    // it means the the current cell value is 0, thus the next loop will never be executed.
+    // The `Clear` and `Mul` instructions are just a collapsed loops, so it counts too.
+    .coalesce(|a, b| {
+        if a.is_loop() && b.is_loop() {
+            Ok(a)
+        } else {
+            Err((a, b))
+        }
+    })
+
+    // Recurse inside surviving loops
+    .map(|i| match i {
+        Loop { body, position } => {
+            Loop {
+                body: remove_dead_code_inner(body, false),
+                position
+            }
+        },
+        _ => i
+    })
+
+    .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
