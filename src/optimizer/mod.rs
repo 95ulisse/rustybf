@@ -70,9 +70,15 @@ impl Optimizer {
     /// Runs all the passes on the given set of instructions
     pub fn run(&self, instructions: Vec<Instruction>) -> Vec<Instruction> {
         let mut accum = instructions;
-        for pass in &self.passes {
-            accum = pass.run(accum);
+        
+        // Ideally, we would like to repeat the whole pipeline of passes
+        // until we reach the fixed point, but this should be enough.
+        for _ in 0..10 {
+            for pass in &self.passes {
+                accum = pass.run(accum);
+            }
         }
+
         accum
     }
 
