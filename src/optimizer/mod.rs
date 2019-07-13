@@ -78,11 +78,13 @@ impl Optimizer {
 
 // Links to the modules of all the passes
 pub mod collapse_increments;
+pub mod dead_code;
 
 lazy_static! {
     pub static ref ALL_OPTIMIZATIONS: HashMap<&'static str, Arc<dyn Pass + Sync + Send>> = {
         let mut map: HashMap<_, Arc<dyn Pass + Sync + Send>> = HashMap::new();
         map.insert("collapse-increments", Arc::new(collapse_increments::CollapseIncrements));
+        map.insert("dead-code", Arc::new(dead_code::DeadCode));
         map
     };
 }
