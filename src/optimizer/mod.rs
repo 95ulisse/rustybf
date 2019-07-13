@@ -85,6 +85,7 @@ lazy_static! {
         let mut map: HashMap<_, Arc<dyn Pass + Sync + Send>> = HashMap::new();
         map.insert("collapse-increments", Arc::new(CollapseIncrements));
         map.insert("dead-code", Arc::new(DeadCode));
+        map.insert("clear-loops", Arc::new(ClearLoops));
         map
     };
 }

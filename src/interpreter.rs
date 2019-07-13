@@ -170,6 +170,10 @@ impl<R, W> Interpreter<R, W>
                     while self.tape[self.tape_position] != 0 {
                         self.run(body)?;
                     }
+                },
+
+                Instruction::Clear { .. } => {
+                    self.tape[self.tape_position] = 0;
                 }
 
             }

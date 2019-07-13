@@ -54,7 +54,14 @@ impl Pass for CollapseIncrements {
                             position: posa.merge(posb)
                         })
                     }
-                }
+                },
+
+                // Merge also the clears
+                (Clear { position: posa }, Clear { position: posb }) => {
+                    Ok(Clear {
+                        position: posa.merge(posb)
+                    })
+                },
 
                 // Loops must be optimized too
                 (Loop { body, position }, other) => {
@@ -95,10 +102,13 @@ impl Pass for DeadCode {
 
         // Remove consecutive loops. When we have two consecutive loops,
         // the second one is dead code because if the previous one exited,
-        // it means the the current cell value is 0, thus the next loop will never be executed
+        // it means the the current cell value is 0, thus the next loop will never be executed.
+        // The `Clear` instruction is just a collapsed loop, so it counts too.
         .coalesce(|a, b| {
             match (a, b) {
-                (a @ Loop { .. }, Loop { .. }) => Ok(a),
+                (a @ Loop { .. }, Loop { .. }) |
+                (a @ Loop { .. }, Clear { .. }) => Ok(a),
+
                 (a, b) => Err((a, b))
             }
         })
@@ -108,6 +118,59 @@ impl Pass for DeadCode {
         .skip_while(|i| match i {
             Loop { .. } => true,
             _ => false
+        })
+
+        // Recurse inside surviving loops
+        .map(|i| match i {
+            Loop { body, position } => {
+                Loop {
+                    body: DeadCode.run(body),
+                    position
+                }
+            },
+            _ => i
+        })
+
+        .collect()
+    }
+
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClearLoops;
+
+impl Pass for ClearLoops {
+
+    fn name(&self) -> &str {
+        "clear-loops"
+    }
+
+    fn run(&self, instructions: Vec<Instruction>) -> Vec<Instruction> {
+        use Instruction::*;
+        instructions.into_iter()
+        
+        // `[-]` is a very common idiom to clear the current cell.
+        .map(|i| match &i {
+            Loop { ref body, position } => {
+                match body.as_slice() {
+                    [ Add { amount: 255, .. } ] => {
+                        Clear { position: *position }
+                    },
+                    _ => i
+                }
+            },
+            _ => i
+        })
+
+        // Recurse inside surviving loops
+        .map(|i| match i {
+            Loop { body, position } => {
+                Loop {
+                    body: ClearLoops.run(body),
+                    position
+                }
+            },
+            _ => i
         })
 
         .collect()

@@ -41,18 +41,21 @@ pub enum Instruction {
         amount: usize,
         position: Position
     },
-    Left{
+    Left {
         amount: usize,
         position: Position
     },
-    Input{
+    Input {
         position: Position
     },
-    Output{
+    Output {
         position: Position
     },
-    Loop{
+    Loop {
         body: Vec<Instruction>,
+        position: Position
+    },
+    Clear {
         position: Position
     }
 }
@@ -67,7 +70,8 @@ impl Instruction {
              Instruction::Left { position, .. } => position,
              Instruction::Input { position, .. } => position,
              Instruction::Output { position, .. } => position,
-             Instruction::Loop { position, .. } => position
+             Instruction::Loop { position, .. } => position,
+             Instruction::Clear { position, ..} => position
         }
     }
 
@@ -106,6 +110,9 @@ fn print_instruction(instruction: &Instruction, f: &mut fmt::Formatter, level: u
                 writeln!(f)?;
             }
             write!(f, "{:width$}}}", "", width = level * 4)?;
+        },
+        Instruction::Clear { .. } => {
+            write!(f, "Clear")?;
         }
     }
     Ok(())
