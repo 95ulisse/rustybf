@@ -43,7 +43,7 @@ impl Optimizer {
             },
             "all" => {
                 // All the passes
-                passes.extend(ALL_OPTIMIZATIONS.values().cloned());
+                passes.extend(DEFAULT_OPTIMIZATION_PASSES.iter().cloned());
             },
             _ => {
                 // Each pass is separated by `,`        
@@ -86,12 +86,22 @@ impl Optimizer {
 
 // Builds a static maps of all the passes
 lazy_static! {
+
+    /// [`HashMap`](std::collections::HashMap) containing all the registered optimization passes.
     pub static ref ALL_OPTIMIZATIONS: HashMap<&'static str, Arc<dyn Pass + Sync + Send>> = {
         use passes::*;
         let mut map: HashMap<_, Arc<dyn Pass + Sync + Send>> = HashMap::new();
+        map.insert("clear-loops", Arc::new(ClearLoops));
         map.insert("collapse-increments", Arc::new(CollapseIncrements));
         map.insert("dead-code", Arc::new(DeadCode));
-        map.insert("clear-loops", Arc::new(ClearLoops));
         map
     };
+
+    /// Order of the default optimizaiton passes.
+    pub static ref DEFAULT_OPTIMIZATION_PASSES: Vec<Arc<dyn Pass + Sync + Send>> = vec![
+        Arc::clone(&ALL_OPTIMIZATIONS["clear-loops"]),
+        Arc::clone(&ALL_OPTIMIZATIONS["collapse-increments"]),
+        Arc::clone(&ALL_OPTIMIZATIONS["dead-code"]),
+    ];
+
 }
