@@ -25,36 +25,12 @@ impl Pass for CollapseIncrements {
                     })
                 },
 
-                // Merge consecutive lefts together
-                (Left { amount: x, position: posa }, Left { amount: y, position: posb }) => {
-                    Ok(Left {
-                        amount: x.wrapping_add(y),
+                // Merge consecutive moves
+                (Move { offset: x, position: posa }, Move { offset: y, position: posb }) => {
+                    Ok(Move {
+                        offset: x + y,
                         position: posa.merge(posb)
                     })
-                },
-
-                // Merge consecutive rights together
-                (Right { amount: x, position: posa }, Right { amount: y, position: posb }) => {
-                    Ok(Right {
-                        amount: x.wrapping_add(y),
-                        position: posa.merge(posb)
-                    })
-                },
-
-                // We can also merge alternating lefts and rights
-                (Left  { amount: l, position: posa }, Right { amount: r, position: posb }) |
-                (Right { amount: r, position: posa }, Left  { amount: l, position: posb }) => {
-                    if l >= r {
-                        Ok(Left {
-                            amount: l - r,
-                            position: posa.merge(posb)
-                        })
-                    } else {
-                        Ok(Right {
-                            amount: r - l,
-                            position: posa.merge(posb)
-                        })
-                    }
                 },
 
                 // Merge also the clears
@@ -106,8 +82,7 @@ fn remove_dead_code_inner(instructions: Vec<Instruction>, skip_initial: bool) ->
     // First of all, remove null increments
     instructions.into_iter().filter(|i| match i {
         Add { amount: 0, .. } |
-        Right { amount: 0, .. } |
-        Left { amount: 0, .. } => false,
+        Move { offset: 0, .. } => false,
         _ => true
     })
 
@@ -255,12 +230,8 @@ fn recognize_mul_loop(instructions: &[Instruction]) -> Option<HashMap<isize, u8>
     for i in &instructions[1..] {
         match i {
 
-            Instruction::Left { amount, .. } => {
-                offset -= *amount as isize;
-            },
-
-            Instruction::Right { amount, .. } => {
-                offset += *amount as isize;
+            Instruction::Move { offset: off, .. } => {
+                offset += off;
             },
 
             Instruction::Add { amount, .. } => {

@@ -131,18 +131,9 @@ impl<R, W> Interpreter<R, W>
         for inst in instructions {
             match inst {
                 
-                Instruction::Right { amount, .. } => {
-                    if self.tape_position + amount >= self.tape.len() {
-                        return Err(BrainfuckError::TapeOverflow);
-                    }
-                    self.tape_position += amount;
-                },
-                
-                Instruction::Left { amount, .. } => {
-                    if self.tape_position < *amount {
-                        return Err(BrainfuckError::TapeUnderflow);
-                    }
-                    self.tape_position -= amount;
+                Instruction::Move { offset, .. } => {
+                    let new_offset = self.compute_offset(*offset)?;
+                    self.tape_position = new_offset;
                 },
                 
                 Instruction::Add { amount, .. } => {
@@ -178,20 +169,26 @@ impl<R, W> Interpreter<R, W>
                 },
 
                 Instruction::Mul { offset, amount, .. } => {
-                    let target_pos = (self.tape_position as isize) + *offset;
-                    if target_pos < 0 {
-                        return Err(BrainfuckError::TapeUnderflow);
-                    }
-                    if target_pos >= self.tape.len() as isize {
-                        return Err(BrainfuckError::TapeOverflow);
-                    }
-                    self.tape[target_pos as usize] *= amount;
+                    let target_pos = self.compute_offset(*offset)?;
+                    self.tape[target_pos] *= amount;
                 }
 
             }
         }
 
         Ok(())
+    }
+
+    #[inline]
+    fn compute_offset(&self, offset: isize) -> Result<usize, BrainfuckError> {
+        let target_pos = (self.tape_position as isize) + offset;
+        if target_pos < 0 {
+            return Err(BrainfuckError::TapeUnderflow);
+        }
+        if target_pos >= self.tape.len() as isize {
+            return Err(BrainfuckError::TapeOverflow);
+        }
+        Ok(target_pos as usize)
     }
 
 }

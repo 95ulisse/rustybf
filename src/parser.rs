@@ -37,12 +37,8 @@ pub enum Instruction {
         amount: u8,
         position: Position
     },
-    Right {
-        amount: usize,
-        position: Position
-    },
-    Left {
-        amount: usize,
+    Move {
+        offset: isize,
         position: Position
     },
     Input {
@@ -76,8 +72,7 @@ impl Instruction {
     pub fn position(&self) -> Position {
         match *self {
              Instruction::Add { position, .. } => position,
-             Instruction::Right { position, .. } => position,
-             Instruction::Left { position, .. } => position,
+             Instruction::Move { position, .. } => position,
              Instruction::Input { position, .. } => position,
              Instruction::Output { position, .. } => position,
              Instruction::Loop { position, .. } => position,
@@ -116,11 +111,8 @@ fn print_instruction(instruction: &Instruction, f: &mut fmt::Formatter, level: u
         Instruction::Add { amount, .. } => {
             write!(f, "Add({})", amount)?;
         },
-        Instruction::Right { amount, .. } => {
-            write!(f, "Right({})", amount)?;
-        },
-        Instruction::Left { amount, .. } => {
-            write!(f, "Left({})", amount)?;
+        Instruction::Move { offset, .. } => {
+            write!(f, "Move <{:+}>", offset)?;
         },
         Instruction::Input { .. } => {
             write!(f, "Input")?;
@@ -140,7 +132,7 @@ fn print_instruction(instruction: &Instruction, f: &mut fmt::Formatter, level: u
             write!(f, "Clear")?;
         },
         Instruction::Mul { offset, amount, .. } => {
-            write!(f, "Mul({}) {{ offset: {} }}", amount, offset)?;
+            write!(f, "Mul({}) <{:+}>", amount, offset)?;
         }
     }
     Ok(())
@@ -155,8 +147,8 @@ pub fn parse(r: impl Read) -> Result<Vec<Instruction>, BrainfuckError> {
     for (index, res) in r.bytes().enumerate() {
         match res {
             Err(e) => return Err(BrainfuckError::IoError(e)),
-            Ok(b'>') => instructions.push(Instruction::Right  { position: index.into(), amount: 1 }),
-            Ok(b'<') => instructions.push(Instruction::Left   { position: index.into(), amount: 1 }),
+            Ok(b'>') => instructions.push(Instruction::Move   { position: index.into(), offset: 1 }),
+            Ok(b'<') => instructions.push(Instruction::Move   { position: index.into(), offset: -1 }),
             Ok(b'+') => instructions.push(Instruction::Add    { position: index.into(), amount: 1  }),
             Ok(b'-') => instructions.push(Instruction::Add    { position: index.into(), amount: u8::MAX }),
             Ok(b'.') => instructions.push(Instruction::Output { position: index.into() }),
@@ -215,8 +207,8 @@ mod tests {
         assert_eq!(parse(prog).unwrap(), vec![
             Instruction::Add { amount: 1, position: 0.into() },
             Instruction::Add { amount: u8::MAX, position: 1.into() },
-            Instruction::Right { position: 2.into(), amount: 1 },
-            Instruction::Left { position: 3.into(), amount: 1 },
+            Instruction::Move { position: 2.into(), offset: 1 },
+            Instruction::Move { position: 3.into(), offset: -1 },
             Instruction::Output { position: 4.into() },
             Instruction::Input { position: 5.into() }
         ]);
