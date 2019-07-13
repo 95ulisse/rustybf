@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use clap::{App, Arg, ArgMatches};
+use itertools::Itertools;
 use rustybf::BrainfuckError;
 use rustybf::parser::{parse, Instruction};
 use rustybf::interpreter::Interpreter;
@@ -14,7 +15,7 @@ fn run_print_instructions(instructions: Vec<Instruction>) -> Result<(), Brainfuc
     Ok(())
 }
 
-fn run_execute(instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
+fn run_execute(instructions: Vec<Instruction>, print_tape: bool) -> Result<(), BrainfuckError> {
     
     info!("Executing program...");
 
@@ -27,6 +28,20 @@ fn run_execute(instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
 
     // Aaaaand, run!
     interpreter.run(&instructions)?;
+
+    // Print the whole tape in hex chars
+    if print_tape {
+        let tape = interpreter.tape().iter()
+            .enumerate()
+            .format_with(" ", |(i, x), f| {
+                if i == interpreter.tape_position() {
+                    f(&format_args!("({:02X})", x))
+                } else {
+                    f(&format_args!("{:02X}", x))
+                }
+            });
+        println!("[{}]", tape);
+    }
 
     Ok(())
 
@@ -76,7 +91,7 @@ fn run(matches: ArgMatches) -> Result<(), BrainfuckError> {
         (true,  _,     _    ) => run_print_instructions(instructions),
         (false, false, false) => run_compile(instructions),
         (false, false, true ) => run_compile(instructions),
-        (false, true,  false) => run_execute(instructions),
+        (false, true,  false) => run_execute(instructions, matches.is_present("print-tape")),
         (false, true,  true ) => unreachable!()
     }
 
@@ -132,6 +147,12 @@ fn main() {
             Arg::with_name("print-instructions")
                 .long("print-instructions")
                 .help("Prints the optimized instructions and exits")
+        )
+        .arg(
+            Arg::with_name("print-tape")
+                .long("print-tape")
+                .conflicts_with("compile")
+                .help("Prints the value of the tape at the end of execution")
         )
         .get_matches();
 
