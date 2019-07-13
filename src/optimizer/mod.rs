@@ -1,3 +1,5 @@
+pub mod passes;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::BrainfuckError;
@@ -76,15 +78,13 @@ impl Optimizer {
 
 }
 
-// Links to the modules of all the passes
-pub mod collapse_increments;
-pub mod dead_code;
-
+// Builds a static maps of all the passes
 lazy_static! {
     pub static ref ALL_OPTIMIZATIONS: HashMap<&'static str, Arc<dyn Pass + Sync + Send>> = {
+        use passes::*;
         let mut map: HashMap<_, Arc<dyn Pass + Sync + Send>> = HashMap::new();
-        map.insert("collapse-increments", Arc::new(collapse_increments::CollapseIncrements));
-        map.insert("dead-code", Arc::new(dead_code::DeadCode));
+        map.insert("collapse-increments", Arc::new(CollapseIncrements));
+        map.insert("dead-code", Arc::new(DeadCode));
         map
     };
 }
