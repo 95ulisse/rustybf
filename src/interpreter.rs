@@ -171,6 +171,13 @@ impl<R, W> Interpreter<R, W>
                 },
 
                 Instruction::Mul { offset, amount, .. } => {
+                    // To respect the proper loop semantics, if the current cell value is 0, do nothing.
+                    // Multiplication is always a loop, thus is not executed if the current cell is 0.
+                    // This is important because we might risk goind underflow/overflow for an operation
+                    // which in reality is a noop.
+                    if self.tape[self.tape_position] == Wrapping(0) {
+                        continue;
+                    }
                     let target_pos = self.compute_offset(*offset)?;
                     let tmp = self.tape[self.tape_position] * (*amount);
                     self.tape[target_pos] += tmp;
