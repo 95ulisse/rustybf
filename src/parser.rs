@@ -96,6 +96,18 @@ impl Instruction {
         }
     }
 
+    /// Returns a value indicating whether this instruction sets the value of the current cell to zero.
+    /// This is useful for dead code elimination.
+    pub fn clears_current_cell(&self) -> bool {
+        match *self {
+            Instruction::Loop { .. } |
+            Instruction::Clear { .. }
+                => true,
+
+            _ => false
+        }
+    }
+
 }
 
 impl fmt::Display for Instruction {

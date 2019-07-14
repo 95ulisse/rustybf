@@ -95,9 +95,8 @@ fn remove_dead_code_inner(instructions: Vec<Instruction>, skip_initial: bool) ->
     // Remove consecutive loops. When we have two consecutive loops,
     // the second one is dead code because if the previous one exited,
     // it means the the current cell value is 0, thus the next loop will never be executed.
-    // The `Clear` and `Mul` instructions are just a collapsed loops, so it counts too.
     .coalesce(|a, b| {
-        if a.is_loop() && b.is_loop() {
+        if a.clears_current_cell() && b.is_loop() {
             Ok(a)
         } else {
             Err((a, b))
