@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 use std::num::Wrapping;
-use crate::BrainfuckError;
-use crate::parser::Instruction;
+use crate::{BrainfuckError, Instruction};
 
 /// Builder for the [`Interpreter`](crate::interpreter::Interpreter) struct.
 pub struct InterpreterBuilder<R, W>

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::num::Wrapping;
 use std::u8;
 use itertools::{Itertools, Either};
-use crate::parser::Instruction;
+use crate::Instruction;
 use crate::optimizer::Pass;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

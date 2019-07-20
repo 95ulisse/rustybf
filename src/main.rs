@@ -3,10 +3,9 @@
 use std::fs::File;
 use clap::{App, Arg, ArgMatches};
 use itertools::Itertools;
-use rustybf::BrainfuckError;
-use rustybf::parser::{parse, Instruction};
-use rustybf::interpreter::Interpreter;
-use rustybf::optimizer::{Optimizer, ALL_OPTIMIZATIONS};
+use rustybf::{BrainfuckError, Instruction, Interpreter, Optimizer};
+use rustybf::parser::parse;
+use rustybf::optimizer::ALL_OPTIMIZATIONS;
 
 fn run_print_instructions(instructions: Vec<Instruction>) -> Result<(), BrainfuckError> {
     for i in &instructions {

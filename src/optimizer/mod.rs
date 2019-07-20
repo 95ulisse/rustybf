@@ -2,8 +2,7 @@ pub mod passes;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::BrainfuckError;
-use crate::parser::Instruction;
+use crate::{BrainfuckError, Instruction};
 
 /// An optimization pass.
 pub trait Pass {
