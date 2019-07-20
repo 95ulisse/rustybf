@@ -20,7 +20,7 @@ mkdir -p "$OUTPUT_DIR"
 
 # All the possible optimizations, including the special values
 # `none` (which will be our baseline) and `all`.
-OPTIMIZATIONS=("none" $($RUSTYBF --list-optimizations) "all")
+OPTIMIZATIONS=("none" $($RUSTYBF list-optimizations) "all")
 
 # Prepare the head of the csv we will create
 echo -n "program," > "$OUTPUT_ABSOLUTE"
@@ -36,7 +36,7 @@ for prog in $PROGRAMS_DIR/*.b; do
     for opt in "${OPTIMIZATIONS[@]}"; do
         
         # Run the program with this optimization measuring time
-        COMMAND="$RUSTYBF -e -O $opt $prog"
+        COMMAND="$RUSTYBF -O $opt exec $prog"
         echo "  => $opt"
         ({ time $COMMAND < "$prog.in" ; } 2>&1 >/dev/null | tr -d '\n') >> "$OUTPUT_ABSOLUTE"
         echo -n "," >> "$OUTPUT_ABSOLUTE"
