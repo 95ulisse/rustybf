@@ -3,16 +3,16 @@
 use std::fs::File;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use itertools::Itertools;
-use rustybf::{BrainfuckError, Instruction, Interpreter, Optimizer};
+use rustybf::{BrainfuckError, Instruction, Compiler, Interpreter, Optimizer};
 use rustybf::parser::parse;
 use rustybf::optimizer::ALL_OPTIMIZATIONS;
 
 fn load_program(path: &str, optimizer: &Optimizer) -> Result<Vec<Instruction>, BrainfuckError> {
     
     // Parse the file
-    debug!("Opening {}...", path);
+    debug!("Opening {}.", path);
     let file = File::open(path)?;
-    debug!("Parsing source file...");
+    debug!("Parsing source file.");
     let mut instructions = parse(file)?;
     info!("Source file {} loaded.", path);
 
@@ -53,41 +53,89 @@ fn run_exec(matches: &ArgMatches, optimizer: &Optimizer) -> Result<(), Brainfuck
 
     // JIT is not implemented yet
     if matches.is_present("jit") {
-        return Err("JIT is not implemented yet".into());
-    }
+        
+        let optimization_level =
+            matches.value_of("llvm-opt").unwrap()
+            .parse::<u32>().map_err(|e| format!("Invalid value for llvm-opt: {}", e.to_string()))?;
 
-    info!("Executing program using interpreter...");
+        // Compile the program
+        info!("Compiling program, optimization level {}.", optimization_level);
+        let program =
+            Compiler::new(optimization_level)
+            .compile_instructions(&instructions)
+            .finish();
 
-    // Prepare an interpreter to run the instructions
-    let mut interpreter =
-        Interpreter::builder()
-        .input(std::io::stdin())
-        .output(std::io::stdout())
-        .build();
+        // Run the program
+        info!("Executing program.");
+        program.run();
 
-    // Aaaaand, run!
-    interpreter.run(&instructions)?;
+    } else {
 
-    // Print the whole tape in hex chars
-    if matches.is_present("print-tape") {
-        let tape = interpreter.tape().iter()
-            .enumerate()
-            .format_with(" ", |(i, x), f| {
-                if i == interpreter.tape_position() {
-                    f(&format_args!("({:02X})", x))
-                } else {
-                    f(&format_args!("{:02X}", x))
-                }
-            });
-        println!("[{}]", tape);
+        info!("Executing program using interpreter.");
+
+        // Prepare an interpreter to run the instructions
+        let mut interpreter =
+            Interpreter::builder()
+            .input(std::io::stdin())
+            .output(std::io::stdout())
+            .build();
+
+        // Aaaaand, run!
+        interpreter.run(&instructions)?;
+
+        // Print the whole tape in hex chars
+        if matches.is_present("print-tape") {
+            let tape = interpreter.tape().iter()
+                .enumerate()
+                .format_with(" ", |(i, x), f| {
+                    if i == interpreter.tape_position() {
+                        f(&format_args!("({:02X})", x))
+                    } else {
+                        f(&format_args!("{:02X}", x))
+                    }
+                });
+            println!("[{}]", tape);
+        }
+
     }
 
     Ok(())
 
 }
 
-fn run_compile(_matches: &ArgMatches, _optimizer: &Optimizer) -> Result<(), BrainfuckError> {
-    Err("Compile mode is not implemented yet.".into())
+fn run_compile(matches: &ArgMatches, optimizer: &Optimizer) -> Result<(), BrainfuckError> {
+    
+    let instructions = load_program(matches.value_of("INPUT").unwrap(), optimizer)?;
+
+    let optimization_level =
+        matches.value_of("llvm-opt").unwrap()
+        .parse::<u32>().map_err(|e| format!("Invalid value for llvm-opt: {}", e.to_string()))?;
+
+    // Compile the program
+    info!("Compiling program, optimization level {}.", optimization_level);
+    let program =
+        Compiler::new(optimization_level)
+        .compile_instructions(&instructions)
+        .finish();
+
+    // Print the IR if we've been asked to do so
+    if matches.is_present("print-llvm-ir") {
+        program.dump(&mut std::io::stdout())?;
+    }
+
+    // Save the program to disk
+    let output = matches.value_of("output").unwrap();
+    let obj = matches.is_present("obj");
+    if obj {
+        program.save_object(output)?;
+        info!("Object file written at {}", output);
+    } else {
+        program.save_executable(output)?;
+        info!("Executable written at {}", output);
+    }
+
+    Ok(())
+
 }
 
 fn run(matches: ArgMatches) -> Result<(), BrainfuckError> {
@@ -173,28 +221,62 @@ fn main() {
                     .required(true)
             )
             .arg(
+                Arg::with_name("print-tape")
+                    .long("print-tape")
+                    .conflicts_with("jit")
+                    .help("Prints the value of the tape at the end of execution")
+            )
+            .arg(
                 Arg::with_name("jit")
                     .short("j")
                     .long("jit")
                     .help("Use the JIT engine instead of the interpreter to execute the program")
             )
             .arg(
-                Arg::with_name("print-tape")
-                    .long("print-tape")
-                    .conflicts_with("jit")
-                    .help("Prints the value of the tape at the end of execution")
+                Arg::with_name("llvm-opt")
+                    .long("llvm-opt")
+                    .help("Sets the LLVM optimization level for JIT compilation")
+                    .requires("jit")
+                    .takes_value(true)
+                    .default_value_if("jit", None, "3")
             )
         )
 
         // Subcommand: compile
         .subcommand(
             SubCommand::with_name("compile")
-            .about("Compiles a Brainfuck program producing an executable")
+            .about("Compiles a Brainfuck program producing an executable file")
             .arg(
                 Arg::with_name("INPUT")
                     .help("Sets the input file to use")
                     .index(1)
                     .required(true)
+            )
+            .arg(
+                Arg::with_name("output")
+                    .short("o")
+                    .long("output")
+                    .help("Path of the final file to create")
+                    .required(true)
+                    .takes_value(true)
+            )
+            .arg(
+                Arg::with_name("obj")
+                    .long("obj")
+                    .help("Do not link the final executable. The output of the compilation will be an object file.")
+            )
+            .arg(
+                Arg::with_name("llvm-opt")
+                    .long("llvm-opt")
+                    .help("Sets the LLVM optimization level for compilation")
+                    .takes_value(true)
+                    .default_value("3")
+            )
+            .arg(
+                Arg::with_name("print-llvm-ir")
+                    .long("print-llvm-ir")
+                    .short("p")
+                    .help("Prints to stdout the compiled LLVM IR")
             )
         )
 
