@@ -1,13 +1,15 @@
 use std::cell::RefCell;
 use std::io::Write;
+use std::num::Wrapping;
 use std::path::Path;
 use std::process::Command;
-use inkwell::{AddressSpace, OptimizationLevel};
+use inkwell::{AddressSpace, OptimizationLevel, IntPredicate};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::{Module, Linkage};
 use inkwell::targets::{CodeModel, RelocMode, FileType, Target, TargetMachine, InitializationConfig};
+use inkwell::values::{BasicValueEnum, PointerValue};
 use tempfile::NamedTempFile;
 use crate::{BrainfuckError, Instruction};
 
@@ -16,7 +18,11 @@ pub struct Compiler {
     context: Context,
     module: Module,
     builder: Builder,
-    optimization_level: OptimizationLevel
+    optimization_level: OptimizationLevel,
+
+    // A couple of useful values inside the emitted function
+    tape: BasicValueEnum,
+    ptr: PointerValue
 }
 
 impl Compiler {
@@ -52,7 +58,7 @@ impl Compiler {
         // to manage the tape
         let calloc_type = i8_ptr_type.fn_type(&[i32_type.into(), i32_type.into()], false);
         let free_type = void_type.fn_type(&[i8_ptr_type.into()], false);
-        module.add_function("calloc", calloc_type, Some(Linkage::External));
+        let calloc_fn = module.add_function("calloc", calloc_type, Some(Linkage::External));
         module.add_function("free", free_type, Some(Linkage::External));
 
         // Create a `main` function
@@ -63,34 +69,168 @@ impl Compiler {
         let entry_block = context.append_basic_block(&main_function, "entry");
         builder.position_at_end(&entry_block);
 
-        // Return a constant
-        let value = i32_type.const_int(42, false);
-        builder.build_return(Some(&value));
+        // First things first: reserve space for the local variables
+        let ptr = builder.build_alloca(i8_ptr_type, "ptr");
+
+        // Emit runtime setup: use `calloc` to create space for 30.000 cells
+        let tape =
+            builder.build_call(
+                calloc_fn,
+                &[
+                    i32_type.const_int(30_000, false).into(),
+                    i32_type.const_int(1, false).into()
+                ],
+                "tape"
+            )
+            .try_as_basic_value()
+            .left()
+            .unwrap();
+
+        // Allocate the variable that will be the pointer moved on the tape
+        builder.build_store(ptr, tape);
 
         Compiler {
             context,
             module,
             builder,
-            optimization_level: opt
+            optimization_level: opt,
+            tape,
+            ptr
         }
     }
 
     /// Compiles the given instructions. This method can be called multiple times,
     /// allowing to compile instructions in a streaming fashion.
     /// To conclude the compilation, call the `finish()` method.
-    pub fn compile_instructions(self, _instructions: &[Instruction]) -> Self {
+    pub fn compile_instructions(mut self, instructions: &[Instruction]) -> Self {
+        let i8_type = self.context.i8_type();
+        let i32_type = self.context.i32_type();
+        let putchar_fn = self.module.get_function("putchar").unwrap();
+        let getchar_fn = self.module.get_function("getchar").unwrap();
+
+        for instruction in instructions {
+            match instruction {
+                
+                Instruction::Add { amount: Wrapping(amount), .. } => {
+                    // Fetch the value of the cell pointed from `ptr`, increment it and store it back
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    let value = self.builder.build_load(ptr.into_pointer_value(), "value");
+                    let value = self.builder.build_int_add(value.into_int_value(), i8_type.const_int((*amount).into(), false), "value");
+                    self.builder.build_store(ptr.into_pointer_value(), value);
+                },
+                
+                Instruction::Move { offset, .. } => {
+                    // Load the cell pointer, add the offset, store it back on the stack
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    let ptr = unsafe { self.builder.build_in_bounds_gep(ptr.into_pointer_value(), &[ i32_type.const_int(*offset as u64, false) ], "ptr") };
+                    self.builder.build_store(self.ptr, ptr);
+                },
+                
+                Instruction::Input { .. } => {
+                    // Call `getchar`, truncate the result and store it into the current cell
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    let value = self.builder.build_call(getchar_fn, &[], "input_value").try_as_basic_value().left().unwrap();
+                    let value = self.builder.build_int_truncate(value.into_int_value(), i8_type, "input_value");
+                    self.builder.build_store(ptr.into_pointer_value(), value);
+                },
+                
+                Instruction::Output { .. } => {
+                    // Fetch the current cell and call `putchar`
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    let value = self.builder.build_load(ptr.into_pointer_value(), "value");
+                    self.builder.build_call(putchar_fn, &[
+                        self.builder.build_int_s_extend(value.into_int_value(), i32_type, "").into()
+                    ], "");
+                },
+                
+                Instruction::Loop { body, .. } => {
+                    // The idea is having three blocks like this:
+                    //
+                    // ```
+                    //     br loop_guard
+                    //
+                    // loop_guard:
+                    //     <load *ptr>
+                    //     <jump to loop_body if *ptr != 0, to loop_end otherwise>
+                    //
+                    // loop_body:
+                    //     <loop body>
+                    //     br loop_guard
+                    //
+                    // loop_end:
+                    //     <continue generation from here>
+                    // ```
+                    //
+                    // This is equivalent to:
+                    // while (*ptr != 0) { ... }
+
+                    // Start by creating the three blocks
+                    let main_function = self.builder.get_insert_block().unwrap().get_parent().unwrap();
+                    let loop_guard = self.context.append_basic_block(&main_function, "loop_guard");
+                    let loop_body = self.context.append_basic_block(&main_function, "loop_body");
+                    let loop_end = self.context.append_basic_block(&main_function, "loop_end");
+
+                    // Jump unconditionally to the loop guard
+                    self.builder.build_unconditional_branch(&loop_guard);
+
+                    // Emit the loop guard
+                    self.builder.position_at_end(&loop_guard);
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    let value = self.builder.build_load(ptr.into_pointer_value(), "value");
+                    let guard_value = self.builder.build_int_compare(IntPredicate::EQ, value.into_int_value(), i8_type.const_int(0, false), "guard_value");
+                    self.builder.build_conditional_branch(guard_value, &loop_end, &loop_body);
+
+                    // Emit the loop body
+                    self.builder.position_at_end(&loop_body);
+                    self = self.compile_instructions(&body);
+                    self.builder.build_unconditional_branch(&loop_guard);
+
+                    // Position the builder at the end of the loop and let compilation continue from there
+                    self.builder.position_at_end(&loop_end);
+                    
+                },
+                
+                Instruction::Clear { .. } => {
+                    // Store a 0 in the cell pointed by `ptr`
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    self.builder.build_store(ptr.into_pointer_value(), i8_type.const_int(0, false));
+                },
+                
+                Instruction::Mul { amount: Wrapping(amount), offset, .. } => {
+                    // Basically build the equivalent of:
+                    // *(ptr + offset) += *ptr * amount
+                    let ptr = self.builder.build_load(self.ptr, "ptr");
+                    let ptr_value = self.builder.build_load(ptr.into_pointer_value(), "ptr_value");
+                    let ptr_value = self.builder.build_int_mul(ptr_value.into_int_value(), i8_type.const_int((*amount).into(), false), "ptr_value");
+                    let target = unsafe { self.builder.build_in_bounds_gep(ptr.into_pointer_value(), &[ i32_type.const_int(*offset as u64, false) ], "target") };
+                    let target_value = self.builder.build_load(target, "target_value");
+                    let final_value = self.builder.build_int_add(ptr_value, target_value.into_int_value(), "final_value");
+                    self.builder.build_store(target, final_value);
+                }
+
+            }
+        }
+
         self
     }
 
     /// Finishes the streaming compilation.
     pub fn finish(self) -> CompiledProgram {
+
+        // Finish the main function by calling `free()` on the tape
+        let free_fn = self.module.get_function("free").unwrap();
+        self.builder.build_call(free_fn, &[ self.tape ], "");
+
+        // Emit a return
+        let i32_type = self.context.i32_type();
+        self.builder.build_return(Some(&i32_type.const_int(0, false)));
+
         CompiledProgram {
-            context: self.context,
             module: self.module,
             execution_engine: RefCell::new(None),
-            builder: self.builder,
             optimization_level: self.optimization_level
         }
+
     }
 
     /// Dumps the currently compiled instructions as LLVM IR to the given stream.
@@ -104,10 +244,8 @@ impl Compiler {
 
 /// Compiled Brainfuck program, ready to be JITed or saved to disk.
 pub struct CompiledProgram {
-    context: Context,
     module: Module,
     execution_engine: RefCell<Option<ExecutionEngine>>,
-    builder: Builder,
     optimization_level: OptimizationLevel
 }
 
@@ -116,7 +254,7 @@ impl CompiledProgram {
     /// Executes the compiled program.
     pub fn run(&self) {
 
-        // This is the type of the main function we defined in `new()`
+        // This is the type of the main function we defined in `Compiler::new()`
         type MainFn = unsafe extern "C" fn();
 
         // Initialize the execution engine if not done yet
