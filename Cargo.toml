@@ -1,7 +1,10 @@
 [package]
 name = "rustybf"
+description = "An optimizing compiler, interpreter and JIT for Brainfuck"
 version = "0.1.0"
 authors = ["Marco Cameriero <me@marcocameriero.net>"]
+license = "MIT"
+repository = "https://github.com/95ulisse/rustybf"
 edition = "2018"
 
 [dependencies]
