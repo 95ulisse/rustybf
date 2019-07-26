@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Instruction","A single Brainfuck instruction."]],"fn":[["parse","Parses a Brainfuck program from the given stream."]],"struct":[["Position","Position range to track instructions back to source code. Both ends are inclusive."]]});

@@ -1,0 +1,10 @@
+(function() {var implementors = {};
+implementors["rustybf"] = [{text:"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"struct\" href=\"rustybf/parser/struct.Position.html\" title=\"struct rustybf::parser::Position\">Position</a>",synthetic:false,types:["rustybf::parser::Position"]},{text:"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"struct\" href=\"rustybf/optimizer/passes/struct.CollapseIncrements.html\" title=\"struct rustybf::optimizer::passes::CollapseIncrements\">CollapseIncrements</a>",synthetic:false,types:["rustybf::optimizer::passes::CollapseIncrements"]},{text:"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"struct\" href=\"rustybf/optimizer/passes/struct.DeadCode.html\" title=\"struct rustybf::optimizer::passes::DeadCode\">DeadCode</a>",synthetic:false,types:["rustybf::optimizer::passes::DeadCode"]},{text:"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"struct\" href=\"rustybf/optimizer/passes/struct.ClearLoops.html\" title=\"struct rustybf::optimizer::passes::ClearLoops\">ClearLoops</a>",synthetic:false,types:["rustybf::optimizer::passes::ClearLoops"]},{text:"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"struct\" href=\"rustybf/optimizer/passes/struct.MulLoops.html\" title=\"struct rustybf::optimizer::passes::MulLoops\">MulLoops</a>",synthetic:false,types:["rustybf::optimizer::passes::MulLoops"]},];
+
+            if (window.register_implementors) {
+                window.register_implementors(implementors);
+            } else {
+                window.pending_implementors = implementors;
+            }
+        
+})()

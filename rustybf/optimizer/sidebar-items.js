@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["passes",""]],"struct":[["ALL_OPTIMIZATIONS","`HashMap` containing all the registered optimization passes."],["DEFAULT_OPTIMIZATION_PASSES","Order of the default optimizaiton passes."],["Optimizer","Brainfuck IR optimizer."]],"trait":[["Pass","An optimization pass."]]});

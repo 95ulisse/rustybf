@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Interpreter","Main entrypoint of the Brainfuck interpreter. This structure holds the state of the tape and can run a set of instructions."],["InterpreterBuilder","Builder for the `Interpreter` struct."]]});

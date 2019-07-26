@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["CompiledProgram","Compiled Brainfuck program, ready to be JITed or saved to disk."],["Compiler","Compiler from Brainfuck to native code."]]});
