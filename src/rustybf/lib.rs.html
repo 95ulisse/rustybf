@@ -12,7 +12,73 @@
 <span id="12">12</span>
 <span id="13">13</span>
 <span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
 </pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">//! An optimizing compiler, interpreter and JIT for Brainfuck.</span>
+<span class="doccomment">//! </span>
+<span class="doccomment">//! ## Example</span>
+<span class="doccomment">//! </span>
+<span class="doccomment">//! ```rust</span>
+<span class="doccomment">//! use rustybf::{Compiler, Interpreter, Optimizer};</span>
+<span class="doccomment">//! use rustybf::parser::parse;</span>
+<span class="doccomment">//! </span>
+<span class="doccomment">//! // Parse the source file</span>
+<span class="doccomment">//! let file = File::open(&quot;hello_world.b&quot;).unwrap();</span>
+<span class="doccomment">//! let mut instructions = parse(file).unwrap();</span>
+<span class="doccomment">//! </span>
+<span class="doccomment">//! // Optimize the instructions</span>
+<span class="doccomment">//! // (use `rustybf::optimizer::DEFAULT_OPTIMIZATION_PASSES` for the default passes)</span>
+<span class="doccomment">//! let optimizer = Optimizer::with_passes_str(&quot;collapse-increments,mul-loops,dead-code&quot;).unwrap();</span>
+<span class="doccomment">//! instructions = optimizer.run(instructions);</span>
+<span class="doccomment">//! </span>
+<span class="doccomment">//! // Now we can ether prepare an interpreter to run the instructions, or...</span>
+<span class="doccomment">//! let mut interpreter =</span>
+<span class="doccomment">//!     Interpreter::builder()</span>
+<span class="doccomment">//!     .input(std::io::stdin())</span>
+<span class="doccomment">//!     .output(std::io::stdout())</span>
+<span class="doccomment">//!     .build();</span>
+<span class="doccomment">//! interpreter.run(&amp;instructions).unwrap();</span>
+<span class="doccomment">//! </span>
+<span class="doccomment">//! // ... JIT compile the program and jump right to it</span>
+<span class="doccomment">//! let program =</span>
+<span class="doccomment">//!     Compiler::new(3) // 3 is the LLVM optimization level</span>
+<span class="doccomment">//!     .compile_instructions(&amp;instructions)</span>
+<span class="doccomment">//!     .finish();</span>
+<span class="doccomment">//! program.run();</span>
+<span class="doccomment">//! ```</span>
+
 <span class="attribute">#[<span class="ident">macro_use</span>]</span> <span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">lazy_static</span>;
 
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">error</span>;
