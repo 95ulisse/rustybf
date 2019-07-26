@@ -2,6 +2,8 @@
 
 An optimizing compiler, interpreter and JIT for Brainfuck.
 
+API docs: [https://95ulisse.github.io/rustybf](https://95ulisse.github.io/rustybf)
+
 ## Install `rustybf`
 
 To install the binary `rustybf`, clone the repo and use `cargo` to install it:
