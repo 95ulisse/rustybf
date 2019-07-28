@@ -2,7 +2,8 @@
 //! 
 //! ## Example
 //! 
-//! ```rust
+//! ```rust,no_run
+//! use std::fs::File;
 //! use rustybf::{Compiler, Interpreter, Optimizer};
 //! use rustybf::parser::parse;
 //! 

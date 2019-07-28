@@ -31,7 +31,7 @@ fn run(program: &[u8], input: &[u8], expected: &[u8]) -> Result<(), BrainfuckErr
 
 }
 
-fn run_jit(program: &[u8], input: &[u8], expected: &[u8]) -> Result<(), BrainfuckError> {
+fn run_compiled(program: &[u8], input: &[u8], expected: &[u8]) -> Result<(), BrainfuckError> {
     
     // Parse the file
     let mut instructions = parse(Cursor::new(program))?;
@@ -86,7 +86,7 @@ macro_rules! test_program {
                 let program = include_bytes!(concat!("./programs/", stringify!($name), ".b"));
                 let input = include_bytes!(concat!("./programs/", stringify!($name), ".b.in"));
                 let output = include_bytes!(concat!("./programs/", stringify!($name), ".b.out"));
-                run_jit(program, input, output).unwrap();
+                run_compiled(program, input, output).unwrap();
             }
         }
     };
