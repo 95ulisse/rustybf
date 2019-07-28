@@ -28,7 +28,7 @@ $ rustybf exec hello_word.b
 hello world
 ```
 
-Execute a program by compiling it to **native code in memory** than run it:
+Execute a program by compiling it to **native code in memory** then run it:
 
 ```
 $ rustybf exec --jit hello_word.b
@@ -62,7 +62,7 @@ let mut instructions = parse(file).unwrap();
 let optimizer = Optimizer::with_passes_str("collapse-increments,mul-loops,dead-code").unwrap();
 instructions = optimizer.run(instructions);
 
-// Now we can ether prepare an interpreter to run the instructions, or...
+// Now we can either prepare an interpreter to run the instructions, or...
 let mut interpreter =
     Interpreter::builder()
     .input(std::io::stdin())
@@ -121,7 +121,7 @@ these kind of arithmetic operations must be explicitely expressed as loops.
 For example, `[->++<]` sets the value of the cell to the right of the current one to twice the value of the current cell.
 
 The pattern can be extended to more complex constructs, like `[->++>+++<<<->]`,
-which modified the value of the two cells to the right and of the cell to the left.
+which modifies the value of the two cells to the right and of the cell to the left.
 
 ```
 $ rustybf -O none print-instructions <(echo "[->++>+++<<<->]")
@@ -156,7 +156,7 @@ Dead simple dead code removal:
 
 - Remove null increments or pointer movements (`Add(0)`, `Move <0>`).
 - Loops at the beginning of the program are never executed since the cells are all initialized
-  to `0`, remove them directly.
+  to `0`, so we can directly remove them.
 - Consecutive loops are never executed: in code like `[A][B]`, if we ever exit from loop `[A]`,
   it means that the current cell value is `0`, so loop `[B]` will never be executed.
   We can safely remove consecutive loops and just keep the first.
