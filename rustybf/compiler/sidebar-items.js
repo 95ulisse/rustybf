@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["CompiledProgram","Compiled Brainfuck program, ready to be JITed or saved to disk."],["Compiler","Compiler from Brainfuck to native code."]]});
+initSidebarItems({"enum":[["InputTarget","Configuration for the input of a JITed program."],["OutputTarget","Configuration for the output of a JITed program."]],"struct":[["CompiledProgram","Compiled Brainfuck program, ready to be JITed or saved to disk."],["Compiler","Compiler from Brainfuck to native code."]]});
