@@ -65,6 +65,11 @@ fn run_exec(matches: &ArgMatches, optimizer: &Optimizer) -> Result<(), Brainfuck
             .compile_instructions(&instructions)
             .finish();
 
+        // Print the IR if we've been asked to do so
+        if matches.is_present("print-llvm-ir") {
+            program.dump(&mut std::io::stdout())?;
+        }
+
         // Run the program
         info!("Executing program.");
         program.run();
@@ -239,6 +244,12 @@ fn main() {
                     .requires("jit")
                     .takes_value(true)
                     .default_value_if("jit", None, "3")
+            )
+            .arg(
+                Arg::with_name("print-llvm-ir")
+                    .long("print-llvm-ir")
+                    .help("Prints the LLVM IR generated for JIT compilation")
+                    .requires("jit")
             )
         )
 

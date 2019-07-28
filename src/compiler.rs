@@ -1,17 +1,40 @@
 use std::cell::RefCell;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::mem;
 use std::num::Wrapping;
 use std::path::Path;
 use std::process::Command;
+use std::rc::Rc;
 use inkwell::{AddressSpace, OptimizationLevel, IntPredicate};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::{Module, Linkage};
 use inkwell::targets::{CodeModel, RelocMode, FileType, Target, TargetMachine, InitializationConfig};
-use inkwell::values::{BasicValueEnum, PointerValue};
+use inkwell::values::{BasicValueEnum, PointerValue, FunctionValue};
 use tempfile::NamedTempFile;
 use crate::{BrainfuckError, Instruction};
+
+/// Configuration for the input of a JITed program.
+pub enum InputTarget {
+    /// Use stdin.
+    Stdio,
+    /// Use the given stream.
+    Custom(Rc<RefCell<dyn Read>>)
+}
+
+/// Configuration for the output of a JITed program.
+pub enum OutputTarget {
+    /// Use stdout.
+    Stdio,
+    /// Use the given stream.
+    Custom(Rc<RefCell<dyn Write>>)
+}
+
+struct IoTarget {
+    input: InputTarget,
+    output: OutputTarget
+}
 
 /// Compiler from Brainfuck to native code.
 pub struct Compiler {
@@ -19,6 +42,7 @@ pub struct Compiler {
     module: Module,
     builder: Builder,
     optimization_level: OptimizationLevel,
+    io: Box<IoTarget>,
 
     // A couple of useful values inside the emitted function
     tape: BasicValueEnum,
@@ -30,6 +54,12 @@ impl Compiler {
     /// Creates a new compiler with the given optimization level.
     /// For more information about optimization levels, refer to the LLVM documentation.    
     pub fn new(optimization_level: u32) -> Compiler {
+        Compiler::new_with_io(optimization_level, InputTarget::Stdio, OutputTarget::Stdio)
+    }
+
+    /// Creates a new compiler with the given optimization level and custom I/O.
+    /// For more information about optimization levels, refer to the LLVM documentation.    
+    pub fn new_with_io(optimization_level: u32, input: InputTarget, output: OutputTarget) -> Compiler {
         
         // Match the optimization level to one of those available for LLVM
         let opt = match optimization_level {
@@ -47,12 +77,33 @@ impl Compiler {
         let i8_ptr_type = context.i8_type().ptr_type(AddressSpace::Generic);
         let i32_type = context.i32_type();
 
-        // Define the two extern functions that will be needed to implement I/O.
-        // Since the output program will be linked against libc, we can use `putchar` and `getchar`.
+        // If we need custom I/O, redefine `getchar` and `putchar` to intercept the calls.
+        // In case of stdio instead, use the ones from libc.
+        let io_target = Box::new(IoTarget { input, output });
         let getchar_type = i32_type.fn_type(&[], false);
         let putchar_type = i32_type.fn_type(&[i32_type.into()], false);
-        module.add_function("getchar", getchar_type, Some(Linkage::External));
-        module.add_function("putchar", putchar_type, Some(Linkage::External));
+        match io_target.input {
+            InputTarget::Stdio => {
+                module.add_function("getchar", getchar_type, Some(Linkage::External));
+            },
+            InputTarget::Custom(_) => {
+                let f = module.add_function("getchar", getchar_type, None);
+                let entry_block = context.append_basic_block(&f, "entry");
+                builder.position_at_end(&entry_block);
+                emit_getchar_interceptor(&context, &builder, &*io_target);
+            }
+        }
+        match io_target.output {
+            OutputTarget::Stdio => {
+                module.add_function("putchar", putchar_type, Some(Linkage::External));
+            },
+            OutputTarget::Custom(_) => {
+                let f = module.add_function("putchar", putchar_type, None);
+                let entry_block = context.append_basic_block(&f, "entry");
+                builder.position_at_end(&entry_block);
+                emit_putchar_interceptor(&context, &f, &builder, &*io_target);
+            }
+        }
 
         // Same reason, declare memory management functions `calloc` and `free`
         // to manage the tape
@@ -94,6 +145,7 @@ impl Compiler {
             module,
             builder,
             optimization_level: opt,
+            io: io_target,
             tape,
             ptr
         }
@@ -228,7 +280,8 @@ impl Compiler {
         CompiledProgram {
             module: self.module,
             execution_engine: RefCell::new(None),
-            optimization_level: self.optimization_level
+            optimization_level: self.optimization_level,
+            io: self.io
         }
 
     }
@@ -242,11 +295,110 @@ impl Compiler {
 
 }
 
+fn emit_getchar_interceptor(context: &Context, builder: &Builder, data: *const IoTarget) {
+    
+    // Declare the types we are going to need
+    let i8_ptr_type = context.i8_type().ptr_type(AddressSpace::Generic);
+    let i32_type = context.i32_type();
+    let i64_type = context.i64_type();
+    let interceptor_type = i32_type.fn_type(&[ i8_ptr_type.into() ], false);
+    let interceptor_ptr_type = interceptor_type.ptr_type(AddressSpace::Generic);
+
+    // Load the function address
+    let function_address_int = i64_type.const_int(getchar_interceptor as u64, false);
+    let function_address_ptr = builder.build_int_to_ptr(function_address_int, interceptor_ptr_type, "function_pointer");
+
+    // Load the data context
+    let data_address_int = i64_type.const_int(unsafe { mem::transmute(data) }, false);
+    let data_address_ptr = builder.build_int_to_ptr(data_address_int, i8_ptr_type, "context_pointer");
+    
+    // Emit the call
+    let ret = builder.build_call(function_address_ptr, &[ data_address_ptr.into() ], "")
+        .try_as_basic_value()
+        .left()
+        .unwrap();
+    builder.build_return(Some(&ret));
+
+}
+
+fn emit_putchar_interceptor(context: &Context, function: &FunctionValue, builder: &Builder, data: *const IoTarget) {
+
+    // Declare the types we are going to need
+    let i8_ptr_type = context.i8_type().ptr_type(AddressSpace::Generic);
+    let i32_type = context.i32_type();
+    let i64_type = context.i64_type();
+    let interceptor_type = i32_type.fn_type(&[ i8_ptr_type.into(), i32_type.into() ], false);
+    let interceptor_ptr_type = interceptor_type.ptr_type(AddressSpace::Generic);
+
+    // Load the function address
+    let function_address_int = i64_type.const_int(putchar_interceptor as u64, false);
+    let function_address_ptr = builder.build_int_to_ptr(function_address_int, interceptor_ptr_type, "function_pointer");
+
+    // Load the data context
+    let data_address_int = i64_type.const_int(unsafe { mem::transmute(data) }, false);
+    let data_address_ptr = builder.build_int_to_ptr(data_address_int, i8_ptr_type, "context_pointer");
+    
+    // Emit the call
+    let ret =
+        builder.build_call(
+            function_address_ptr,
+            &[
+                data_address_ptr.into(),
+                function.get_nth_param(0).unwrap()
+            ],
+            ""
+        )
+        .try_as_basic_value()
+        .left()
+        .unwrap();
+    builder.build_return(Some(&ret));
+
+}
+
+/// Callback invoked during the execution of the Brainfuck program to intercept the input command `,`.
+extern "C" fn getchar_interceptor(data: *const IoTarget) -> i32 {
+
+    // Read a single byte from the input stream
+    let data = unsafe { &*data };
+    match data.input {
+        InputTarget::Custom(ref r) => {
+            let mut buf = [ 0u8 ];
+            r.borrow_mut()
+                .read_exact(&mut buf)
+                .map(|_| buf[0] as i32)
+                .unwrap_or(-1)
+        },
+        _ => unreachable!()
+    }
+
+}
+
+/// Callback invoked during the execution of the Brainfuck program to intercept the output command `.`.
+extern "C" fn putchar_interceptor(data: *const IoTarget, value: i32) -> i32 {
+    
+    // Write the byte to the output stream
+    let data = unsafe { &*data };
+    match data.output {
+        OutputTarget::Custom(ref w) => {
+            let buf = [ value as u8 ];
+            w.borrow_mut()
+                .write_all(&buf)
+                .map(|_| value)
+                .unwrap_or(-1)
+        },
+        _ => unreachable!()
+    }
+
+}
+
 /// Compiled Brainfuck program, ready to be JITed or saved to disk.
 pub struct CompiledProgram {
     module: Module,
     execution_engine: RefCell<Option<ExecutionEngine>>,
-    optimization_level: OptimizationLevel
+    optimization_level: OptimizationLevel,
+
+    // The I/O streams must be kept alive if we are not using stdio
+    io: Box<IoTarget>
 }
 
 impl CompiledProgram {
@@ -273,8 +425,17 @@ impl CompiledProgram {
     }
 
     /// Saves the compiled program on disk as an object file.
+    /// Panics if the program was compiled with custom I/O.
     pub fn save_object<P: AsRef<Path>>(&self, path: P) -> Result<(), BrainfuckError> {
         
+        // Panic if we are using a custom stdio configuration
+        if let InputTarget::Custom(_) = &self.io.input {
+            panic!("Cannot save compiled program to disk when using custom I/O.");
+        }
+        if let OutputTarget::Custom(_) = &self.io.output {
+            panic!("Cannot save compiled program to disk when using custom I/O.");
+        }
+
         Target::initialize_all(&InitializationConfig::default());
 
         // Prepare a TargetMachine targeting the current host
@@ -300,7 +461,17 @@ impl CompiledProgram {
     /// 
     /// The program is first compiled as an object file in a temporary location,
     /// then it is linked using `clang`.
+    /// 
+    /// Panics if the program was compiled with custom I/O.
     pub fn save_executable<P: AsRef<Path>>(&self, path: P) -> Result<(), BrainfuckError> {
+        
+        // Panic if we are using a custom stdio configuration
+        if let InputTarget::Custom(_) = &self.io.input {
+            panic!("Cannot save compiled program to disk when using custom I/O.");
+        }
+        if let OutputTarget::Custom(_) = &self.io.output {
+            panic!("Cannot save compiled program to disk when using custom I/O.");
+        }
 
         // Compile the program to a temporary location
         let file = NamedTempFile::new()?;

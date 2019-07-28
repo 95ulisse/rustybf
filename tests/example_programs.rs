@@ -1,7 +1,10 @@
+use std::cell::RefCell;
 use std::io::{Cursor, Write};
 use std::process::{Command, Stdio};
+use std::rc::Rc;
 use tempfile::NamedTempFile;
 use rustybf::{BrainfuckError, Interpreter, Compiler, Optimizer};
+use rustybf::compiler::{InputTarget, OutputTarget};
 use rustybf::parser::parse;
 
 fn run(program: &[u8], input: &[u8], expected: &[u8]) -> Result<(), BrainfuckError> {
@@ -24,6 +27,39 @@ fn run(program: &[u8], input: &[u8], expected: &[u8]) -> Result<(), BrainfuckErr
 
     // Check that the output of the interpreter matches the expected one
     if interpreter.output().unwrap().get_ref().as_slice() != expected {
+        return Err("Mismatching output".into());
+    }
+
+    Ok(())
+
+}
+
+fn run_jit(program: &[u8], input: &'static [u8], expected: &[u8]) -> Result<(), BrainfuckError> {
+    
+    // Parse the file
+    let mut instructions = parse(Cursor::new(program))?;
+
+    // Optimize the instructions
+    instructions = Optimizer::with_passes_str("all")?.run(instructions);
+
+    // Compile the instructions and setup I/O redirect
+    let input_stream = Rc::new(RefCell::new(Cursor::new(input)));
+    let output_stream = Rc::new(RefCell::new(Cursor::new(Vec::new())));
+    let program =
+        Compiler::new_with_io(
+            3,
+            InputTarget::Custom(input_stream.clone()),
+            OutputTarget::Custom(output_stream.clone())
+        )
+        .compile_instructions(&instructions)
+        .finish();
+    
+    // Run the program
+    program.run();
+
+    // Check that the output of the program matches the expected one
+    let tmp = (*output_stream).borrow();
+    if tmp.get_ref().as_slice() != expected {
         return Err("Mismatching output".into());
     }
 
@@ -79,6 +115,14 @@ macro_rules! test_program {
                 let input = include_bytes!(concat!("./programs/", stringify!($name), ".b.in"));
                 let output = include_bytes!(concat!("./programs/", stringify!($name), ".b.out"));
                 run(program, input, output).unwrap();
+            }
+
+            #[test]
+            fn [<test_ $name _jit>]() {
+                let program = include_bytes!(concat!("./programs/", stringify!($name), ".b"));
+                let input = include_bytes!(concat!("./programs/", stringify!($name), ".b.in"));
+                let output = include_bytes!(concat!("./programs/", stringify!($name), ".b.out"));
+                run_jit(program, input, output).unwrap();
             }
 
             #[test]

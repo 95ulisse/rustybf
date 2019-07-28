@@ -3,12 +3,13 @@ extern crate criterion;
 #[macro_use]
 extern crate lazy_static;
 
-use std::io::{Cursor, Write};
+use std::cell::RefCell;
+use std::io::Cursor;
 use std::fmt;
-use std::process::{Command, Stdio};
+use std::rc::Rc;
 use criterion::{Criterion, ParameterizedBenchmark};
-use tempfile::NamedTempFile;
 use rustybf::{Instruction, Optimizer, Compiler, Interpreter};
+use rustybf::compiler::{InputTarget, OutputTarget};
 use rustybf::parser::parse;
 
 struct Program<'a> {
@@ -76,23 +77,15 @@ fn interpreted_vs_compiled(c: &mut Criterion) {
 
     fn run_compiled(p: &Program<'static>) {
         let program =
-            Compiler::new(3)
+            Compiler::new_with_io(
+                3,
+                InputTarget::Custom(Rc::new(RefCell::new(Cursor::new(p.input)))),
+                OutputTarget::Custom(Rc::new(RefCell::new(Cursor::new(Vec::new()))))
+            )
             .compile_instructions(&p.optimized_instructions)
             .finish();
-        let path = NamedTempFile::new().unwrap().into_temp_path();
-        program.save_executable(&path).unwrap();
-
-        let mut child = Command::new(&path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .spawn()
-            .unwrap();
-        child.stdin.as_mut().unwrap().write_all(p.input).unwrap();
-        let status = child.wait().unwrap();
-
-        if !status.success() {
-            panic!("Compiled program failed");
-        }
+        
+        program.run();
     }
 
     // For each program, bench the performance of the interpreter and of the jit
